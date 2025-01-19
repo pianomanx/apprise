@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# BSD 3-Clause License
+# BSD 2-Clause License
 #
 # Apprise - Push Notification Library.
-# Copyright (c) 2023, Chris Caron <lead2gold@gmail.com>
+# Copyright (c) 2025, Chris Caron <lead2gold@gmail.com>
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
@@ -13,10 +13,6 @@
 # 2. Redistributions in binary form must reproduce the above copyright notice,
 #    this list of conditions and the following disclaimer in the documentation
 #    and/or other materials provided with the distribution.
-#
-# 3. Neither the name of the copyright holder nor the names of its
-#    contributors may be used to endorse or promote products derived from
-#    this software without specific prior written permission.
 #
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 # AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
@@ -36,14 +32,16 @@ from unittest import mock
 
 import requests
 from apprise.common import ConfigFormat
-from apprise.config.ConfigHTTP import ConfigHTTP
-from apprise.plugins.NotifyBase import NotifyBase
-from apprise.common import NOTIFY_SCHEMA_MAP
+from apprise.config.http import ConfigHTTP
+from apprise.plugins import NotifyBase
+from apprise import NotificationManager
 
 # Disable logging for a cleaner testing output
 import logging
 logging.disable(logging.CRITICAL)
 
+# Grant access to our Notification Manager Singleton
+N_MGR = NotificationManager()
 
 # Some exception handling we'll use
 REQUEST_EXCEPTIONS = (
@@ -81,7 +79,7 @@ def test_config_http(mock_post):
             return ''
 
     # Store our good notification in our schema map
-    NOTIFY_SCHEMA_MAP['good'] = GoodNotification
+    N_MGR['good'] = GoodNotification
 
     # Our default content
     default_content = """taga,tagb=good://server01"""

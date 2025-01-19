@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# BSD 3-Clause License
+# BSD 2-Clause License
 #
 # Apprise - Push Notification Library.
-# Copyright (c) 2023, Chris Caron <lead2gold@gmail.com>
+# Copyright (c) 2025, Chris Caron <lead2gold@gmail.com>
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
@@ -13,10 +13,6 @@
 # 2. Redistributions in binary form must reproduce the above copyright notice,
 #    this list of conditions and the following disclaimer in the documentation
 #    and/or other materials provided with the distribution.
-#
-# 3. Neither the name of the copyright holder nor the names of its
-#    contributors may be used to endorse or promote products derived from
-#    this software without specific prior written permission.
 #
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 # AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
@@ -38,7 +34,7 @@ import requests
 from apprise import Apprise
 from apprise import AppriseAttachment
 from apprise import NotifyType
-from apprise.plugins.NotifyXML import NotifyXML
+from apprise.plugins.custom_xml import NotifyXML
 from helpers import AppriseURLTester
 
 # Disable logging for a cleaner testing output
@@ -90,6 +86,9 @@ apprise_url_tests = (
         'instance': NotifyXML,
     }),
     ('xml://user@localhost?method=delete', {
+        'instance': NotifyXML,
+    }),
+    ('xml://user@localhost?method=patch', {
         'instance': NotifyXML,
     }),
 
@@ -248,8 +247,8 @@ def test_plugin_custom_xml_edge_cases(mock_get, mock_post):
     mock_get.return_value = response
 
     results = NotifyXML.parse_url(
-        'xml://localhost:8080/command?:Message=test&method=GET'
-        '&:Key=value&:,=invalid')
+        'xml://localhost:8080/command?:Message=Body&method=GET'
+        '&:Key=value&:,=invalid&:MessageType=')
 
     assert isinstance(results, dict)
     assert results['user'] is None
@@ -261,13 +260,16 @@ def test_plugin_custom_xml_edge_cases(mock_get, mock_post):
     assert results['query'] == 'command'
     assert results['schema'] == 'xml'
     assert results['url'] == 'xml://localhost:8080/command'
-    assert isinstance(results['qsd:'], dict) is True
-    assert results['qsd:']['Message'] == 'test'
+    assert isinstance(results['qsd:'], dict)
+    assert results['qsd:']['Message'] == 'Body'
     assert results['qsd:']['Key'] == 'value'
     assert results['qsd:'][','] == 'invalid'
 
     instance = NotifyXML(**results)
     assert isinstance(instance, NotifyXML)
+
+    # XSD URL is disabled due to custom formatting
+    assert instance.xsd_url is None
 
     response = instance.send(title='title', body='body')
     assert response is True
@@ -287,9 +289,115 @@ def test_plugin_custom_xml_edge_cases(mock_get, mock_post):
 
     # Test our data set for our key/value pair
     assert re.search(r'<Version>[1-9]+\.[0-9]+</Version>', details[1]['data'])
-    assert re.search('<MessageType>info</MessageType>', details[1]['data'])
     assert re.search('<Subject>title</Subject>', details[1]['data'])
-    # Custom entry Message acts as Over-ride and kicks in here
-    assert re.search('<Message>test</Message>', details[1]['data'])
+
+    assert re.search('<Message>test</Message>', details[1]['data']) is None
+    assert re.search('<Message>', details[1]['data']) is None
+    # MessageType was removed from the payload
+    assert re.search('<MessageType>', details[1]['data']) is None
+    # However we can find our mapped Message to the new value Body
+    assert re.search('<Body>body</Body>', details[1]['data'])
     # Custom entry
     assert re.search('<Key>value</Key>', details[1]['data'])
+
+    mock_post.reset_mock()
+    mock_get.reset_mock()
+
+    results = NotifyXML.parse_url(
+        'xml://localhost:8081/command?method=POST&:New=Value')
+
+    assert isinstance(results, dict)
+    assert results['user'] is None
+    assert results['password'] is None
+    assert results['port'] == 8081
+    assert results['host'] == 'localhost'
+    assert results['fullpath'] == '/command'
+    assert results['path'] == '/'
+    assert results['query'] == 'command'
+    assert results['schema'] == 'xml'
+    assert results['url'] == 'xml://localhost:8081/command'
+    assert isinstance(results['qsd:'], dict)
+    assert results['qsd:']['New'] == 'Value'
+
+    instance = NotifyXML(**results)
+    assert isinstance(instance, NotifyXML)
+
+    # XSD URL is disabled due to custom formatting
+    assert instance.xsd_url is None
+
+    response = instance.send(title='title', body='body')
+    assert response is True
+    assert mock_post.call_count == 1
+    assert mock_get.call_count == 0
+
+    details = mock_post.call_args_list[0]
+    assert details[0][0] == 'http://localhost:8081/command'
+    assert instance.url(privacy=False).startswith(
+        'xml://localhost:8081/command?')
+
+    # Generate a new URL based on our last and verify key values are the same
+    new_results = NotifyXML.parse_url(instance.url(safe=False))
+    for k in ('user', 'password', 'port', 'host', 'fullpath', 'path', 'query',
+              'schema', 'url', 'method'):
+        assert new_results[k] == results[k]
+
+    # Test our data set for our key/value pair
+    assert re.search(r'<Version>[1-9]+\.[0-9]+</Version>', details[1]['data'])
+    assert re.search(r'<MessageType>info</MessageType>', details[1]['data'])
+    assert re.search(r'<Subject>title</Subject>', details[1]['data'])
+    # No over-ride
+    assert re.search(r'<Message>body</Message>', details[1]['data'])
+
+    mock_post.reset_mock()
+    mock_get.reset_mock()
+
+    results = NotifyXML.parse_url(
+        'xmls://localhost?method=POST&:Message=Body&:Subject=Title&:Version')
+
+    assert isinstance(results, dict)
+    assert results['user'] is None
+    assert results['password'] is None
+    assert results['port'] is None
+    assert results['host'] == 'localhost'
+    assert results['fullpath'] is None
+    assert results['path'] is None
+    assert results['query'] is None
+    assert results['schema'] == 'xmls'
+    assert results['url'] == 'xmls://localhost'
+    assert isinstance(results['qsd:'], dict)
+    assert results['qsd:']['Version'] == ''
+    assert results['qsd:']['Message'] == 'Body'
+    assert results['qsd:']['Subject'] == 'Title'
+
+    instance = NotifyXML(**results)
+    assert isinstance(instance, NotifyXML)
+
+    # XSD URL is disabled due to custom formatting
+    assert instance.xsd_url is None
+
+    response = instance.send(title='title', body='body')
+    assert response is True
+    assert mock_post.call_count == 1
+    assert mock_get.call_count == 0
+
+    details = mock_post.call_args_list[0]
+    assert details[0][0] == 'https://localhost'
+    assert instance.url(privacy=False).startswith('xmls://localhost')
+
+    # Generate a new URL based on our last and verify key values are the same
+    new_results = NotifyXML.parse_url(instance.url(safe=False))
+
+    # Test that the Version has been dropped
+    assert re.search(
+        r'<Version>[1-9]+\.[0-9]+</Version>', details[1]['data']) is None
+
+    # Test our data set for our key/value pair
+    assert re.search(r'<MessageType>info</MessageType>', details[1]['data'])
+
+    # Subject is swapped for Title
+    assert re.search(r'<Subject>title</Subject>', details[1]['data']) is None
+    assert re.search(r'<Title>title</Title>', details[1]['data'])
+
+    # Message is swapped for Body
+    assert re.search(r'<Message>body</Message>', details[1]['data']) is None
+    assert re.search(r'<Body>body</Body>', details[1]['data'])

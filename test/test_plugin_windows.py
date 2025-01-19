@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# BSD 3-Clause License
+# BSD 2-Clause License
 #
 # Apprise - Push Notification Library.
-# Copyright (c) 2023, Chris Caron <lead2gold@gmail.com>
+# Copyright (c) 2025, Chris Caron <lead2gold@gmail.com>
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
@@ -13,10 +13,6 @@
 # 2. Redistributions in binary form must reproduce the above copyright notice,
 #    this list of conditions and the following disclaimer in the documentation
 #    and/or other materials provided with the distribution.
-#
-# 3. Neither the name of the copyright holder nor the names of its
-#    contributors may be used to endorse or promote products derived from
-#    this software without specific prior written permission.
 #
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 # AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
@@ -113,7 +109,10 @@ def test_plugin_windows_mocked():
     obj.duration = 0
 
     # Test URL functionality
-    assert isinstance(obj.url(), str) is True
+    assert isinstance(obj.url(), str)
+
+    # Verify that a URL ID can not be generated
+    assert obj.url_id() is None
 
     # Check that it found our mocked environments
     assert obj.enabled is True
@@ -129,7 +128,7 @@ def test_plugin_windows_mocked():
     obj = apprise.Apprise.instantiate(
         'windows://_/?image=True', suppress_exceptions=False)
     obj.duration = 0
-    assert isinstance(obj.url(), str) is True
+    assert isinstance(obj.url(), str)
     assert obj.notify(
         title='title', body='body',
         notify_type=apprise.NotifyType.INFO) is True
@@ -137,14 +136,14 @@ def test_plugin_windows_mocked():
     obj = apprise.Apprise.instantiate(
         'windows://_/?image=False', suppress_exceptions=False)
     obj.duration = 0
-    assert isinstance(obj.url(), str) is True
+    assert isinstance(obj.url(), str)
     assert obj.notify(
         title='title', body='body',
         notify_type=apprise.NotifyType.INFO) is True
 
     obj = apprise.Apprise.instantiate(
         'windows://_/?duration=1', suppress_exceptions=False)
-    assert isinstance(obj.url(), str) is True
+    assert isinstance(obj.url(), str)
     # loads okay
     assert obj.duration == 1
     assert obj.notify(
@@ -215,7 +214,7 @@ def test_plugin_windows_native(mock_loadimage,
     obj.duration = 0
 
     # Test URL functionality
-    assert isinstance(obj.url(), str) is True
+    assert isinstance(obj.url(), str)
 
     # Check that it found our mocked environments
     assert obj.enabled is True
@@ -231,7 +230,7 @@ def test_plugin_windows_native(mock_loadimage,
     obj = apprise.Apprise.instantiate(
         'windows://_/?image=True', suppress_exceptions=False)
     obj.duration = 0
-    assert isinstance(obj.url(), str) is True
+    assert isinstance(obj.url(), str)
     assert obj.notify(
         title='title', body='body',
         notify_type=apprise.NotifyType.INFO) is True
@@ -239,14 +238,14 @@ def test_plugin_windows_native(mock_loadimage,
     obj = apprise.Apprise.instantiate(
         'windows://_/?image=False', suppress_exceptions=False)
     obj.duration = 0
-    assert isinstance(obj.url(), str) is True
+    assert isinstance(obj.url(), str)
     assert obj.notify(
         title='title', body='body',
         notify_type=apprise.NotifyType.INFO) is True
 
     obj = apprise.Apprise.instantiate(
         'windows://_/?duration=1', suppress_exceptions=False)
-    assert isinstance(obj.url(), str) is True
+    assert isinstance(obj.url(), str)
     assert obj.notify(
         title='title', body='body',
         notify_type=apprise.NotifyType.INFO) is True

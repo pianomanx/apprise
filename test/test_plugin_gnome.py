@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# BSD 3-Clause License
+# BSD 2-Clause License
 #
 # Apprise - Push Notification Library.
-# Copyright (c) 2023, Chris Caron <lead2gold@gmail.com>
+# Copyright (c) 2025, Chris Caron <lead2gold@gmail.com>
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
@@ -13,10 +13,6 @@
 # 2. Redistributions in binary form must reproduce the above copyright notice,
 #    this list of conditions and the following disclaimer in the documentation
 #    and/or other materials provided with the distribution.
-#
-# 3. Neither the name of the copyright holder nor the names of its
-#    contributors may be used to endorse or promote products derived from
-#    this software without specific prior written permission.
 #
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 # AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
@@ -40,7 +36,7 @@ from unittest.mock import Mock, call, ANY
 import pytest
 
 import apprise
-from apprise.plugins.NotifyGnome import GnomeUrgency, NotifyGnome
+from apprise.plugins.gnome import GnomeUrgency, NotifyGnome
 from helpers import reload_plugin
 
 # Disable logging for a cleaner testing output
@@ -63,7 +59,7 @@ def setup_glib_environment():
         # for the purpose of testing and capture the handling of the
         # library when it is missing
         del sys.modules[gi_name]
-        reload_plugin('NotifyGnome')
+        reload_plugin('gnome')
 
     # We need to fake our gnome environment for testing purposes since
     # the gi library isn't available on CI
@@ -101,8 +97,7 @@ def setup_glib_environment():
 
     # When patching something which has a side effect on the module-level code
     # of a plugin, make sure to reload it.
-    current_module = sys.modules[__name__]
-    reload_plugin('NotifyGnome', replace_in=current_module)
+    reload_plugin('gnome')
 
 
 @pytest.fixture
@@ -140,6 +135,9 @@ def test_plugin_gnome_general_success(obj):
 
     # Test url() call
     assert isinstance(obj.url(), str) is True
+
+    # our URL Identifier is disabled
+    assert obj.url_id() is None
 
     # test notifications
     assert obj.notify(title='title', body='body',
@@ -349,8 +347,7 @@ def test_plugin_gnome_gi_croaks():
 
     # When patching something which has a side effect on the module-level code
     # of a plugin, make sure to reload it.
-    current_module = sys.modules[__name__]
-    reload_plugin('NotifyGnome', replace_in=current_module)
+    reload_plugin('gnome')
 
     # Create instance.
     obj = apprise.Apprise.instantiate('gnome://', suppress_exceptions=False)

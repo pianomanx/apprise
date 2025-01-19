@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# BSD 3-Clause License
+# BSD 2-Clause License
 #
 # Apprise - Push Notification Library.
-# Copyright (c) 2023, Chris Caron <lead2gold@gmail.com>
+# Copyright (c) 2025, Chris Caron <lead2gold@gmail.com>
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
@@ -13,10 +13,6 @@
 # 2. Redistributions in binary form must reproduce the above copyright notice,
 #    this list of conditions and the following disclaimer in the documentation
 #    and/or other materials provided with the distribution.
-#
-# 3. Neither the name of the copyright holder nor the names of its
-#    contributors may be used to endorse or promote products derived from
-#    this software without specific prior written permission.
 #
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 # AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
@@ -36,7 +32,7 @@ from unittest import mock
 import requests
 import pytest
 from json import dumps
-from apprise.plugins.NotifyPushover import PushoverPriority, NotifyPushover
+from apprise.plugins.pushover import PushoverPriority, NotifyPushover
 import apprise
 from helpers import AppriseURLTester
 
@@ -60,9 +56,9 @@ apprise_url_tests = (
     ('pover://%s' % ('a' * 30), {
         'instance': TypeError,
     }),
-    # API Key + invalid sound setting
-    ('pover://%s@%s?sound=invalid' % ('u' * 30, 'a' * 30), {
-        'instance': TypeError,
+    # API Key + custom sound setting
+    ('pover://%s@%s?sound=mysound' % ('u' * 30, 'a' * 30), {
+        'instance': NotifyPushover,
     }),
     # API Key + valid alternate sound picked
     ('pover://%s@%s?sound=spacealarm' % ('u' * 30, 'a' * 30), {
@@ -87,7 +83,7 @@ apprise_url_tests = (
         'instance': NotifyPushover,
     }),
     # API Key + Valid User + 2 Devices
-    ('pover://%s@%s/DEVICE1/DEVICE2/' % ('u' * 30, 'a' * 30), {
+    ('pover://%s@%s/DEVICE1/Device-with-dash/' % ('u' * 30, 'a' * 30), {
         'instance': NotifyPushover,
 
         # Our expected url(privacy=True) startswith() response:
@@ -344,16 +340,17 @@ def test_plugin_pushover_edge_cases(mock_post):
 
     obj = NotifyPushover(
         user_key=user_key, token=token, targets=devices)
-    assert isinstance(obj, NotifyPushover) is True
-    assert len(obj.targets) == 3
+    assert isinstance(obj, NotifyPushover)
+    # Our invalid device is ignored
+    assert len(obj.targets) == 2
 
-    # This call fails because there is 1 invalid device
+    # We notify the 2 devices loaded
     assert obj.notify(
         body='body', title='title',
-        notify_type=apprise.NotifyType.INFO) is False
+        notify_type=apprise.NotifyType.INFO) is True
 
     obj = NotifyPushover(user_key=user_key, token=token)
-    assert isinstance(obj, NotifyPushover) is True
+    assert isinstance(obj, NotifyPushover)
     # Default is to send to all devices, so there will be a
     # device defined here
     assert len(obj.targets) == 1
@@ -365,7 +362,7 @@ def test_plugin_pushover_edge_cases(mock_post):
 
     obj = NotifyPushover(
         user_key=user_key, token=token, targets=set())
-    assert isinstance(obj, NotifyPushover) is True
+    assert isinstance(obj, NotifyPushover)
     # Default is to send to all devices, so there will be a
     # device defined here
     assert len(obj.targets) == 1
@@ -446,4 +443,9 @@ def test_plugin_pushover_config_files(mock_post):
         PushoverPriority.NORMAL
 
     # Notifications work
+    # We test 'pushover_str_int' and 'low' which only matches 1 end point
+    assert aobj.notify(
+        title="title", body="body", tag=[('pushover_str_int', 'low')]) is True
+
+    # Notify everything loaded
     assert aobj.notify(title="title", body="body") is True

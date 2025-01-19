@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# BSD 3-Clause License
+# BSD 2-Clause License
 #
 # Apprise - Push Notification Library.
-# Copyright (c) 2023, Chris Caron <lead2gold@gmail.com>
+# Copyright (c) 2025, Chris Caron <lead2gold@gmail.com>
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
@@ -13,10 +13,6 @@
 # 2. Redistributions in binary form must reproduce the above copyright notice,
 #    this list of conditions and the following disclaimer in the documentation
 #    and/or other materials provided with the distribution.
-#
-# 3. Neither the name of the copyright holder nor the names of its
-#    contributors may be used to endorse or promote products derived from
-#    this software without specific prior written permission.
 #
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 # AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
@@ -38,7 +34,7 @@ import pytest
 from apprise import Apprise
 from apprise import AppriseConfig
 from apprise import NotifyType
-from apprise.plugins.NotifyMSTeams import NotifyMSTeams
+from apprise.plugins.msteams import NotifyMSTeams
 from helpers import AppriseURLTester
 
 # Disable logging for a cleaner testing output
@@ -96,6 +92,15 @@ apprise_url_tests = (
 
          # Our expected url(privacy=True) startswith() response (v2 format):
          'privacy_url': 'msteams://myteam/8...2/m...m/8...2/'}),
+    # Support Newer Native URLs with 4 tokens, introduced in 2025
+    ('https://myteam.webhook.office.com/webhookb2/{}@{}/IncomingWebhook/{}/{}'
+     '/{}'
+     .format(UUID4, UUID4, 'm' * 32, UUID4, 'V2-_' + 'n' * 43), {
+         # All tokens provided - we're good
+         'instance': NotifyMSTeams,
+
+         # Our expected url(privacy=True) startswith() response (v2 format):
+         'privacy_url': 'msteams://myteam/8...2/m...m/8...2/V...n'}),
 
     # Legacy URL Formatting
     ('msteams://{}@{}/{}/{}?t2'.format(UUID4, UUID4, 'c' * 32, UUID4), {

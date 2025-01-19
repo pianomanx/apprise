@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# BSD 3-Clause License
+# BSD 2-Clause License
 #
 # Apprise - Push Notification Library.
-# Copyright (c) 2023, Chris Caron <lead2gold@gmail.com>
+# Copyright (c) 2025, Chris Caron <lead2gold@gmail.com>
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
@@ -13,10 +13,6 @@
 # 2. Redistributions in binary form must reproduce the above copyright notice,
 #    this list of conditions and the following disclaimer in the documentation
 #    and/or other materials provided with the distribution.
-#
-# 3. Neither the name of the copyright holder nor the names of its
-#    contributors may be used to endorse or promote products derived from
-#    this software without specific prior written permission.
 #
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 # AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
@@ -35,7 +31,7 @@ from unittest import mock
 
 import requests
 
-from apprise.plugins.NotifyMailgun import NotifyMailgun
+from apprise.plugins.mailgun import NotifyMailgun
 from helpers import AppriseURLTester
 from apprise import Apprise
 from apprise import AppriseAttachment
@@ -288,9 +284,15 @@ def test_plugin_mailgun_attachments(mock_post):
         'user1@example.com/user2@example.com?batch=yes'.format(apikey))
     assert isinstance(obj, NotifyMailgun)
 
+    # objects will be combined into a single post in batch mode
+    assert len(obj) == 1
+
     # Force our batch to break into separate messages
     obj.default_batch_size = 1
-    # We'll send 2 messages
+
+    # We'll send 2 messages now
+    assert len(obj) == 2
+
     mock_post.reset_mock()
 
     assert obj.notify(
@@ -329,7 +331,7 @@ def test_plugin_mailgun_header_check(mock_post):
     obj = Apprise.instantiate(
         'mailgun://user@localhost.localdomain/{}'.format(apikey))
     assert isinstance(obj, NotifyMailgun)
-    assert isinstance(obj.url(), str) is True
+    assert isinstance(obj.url(), str)
 
     # No calls made yet
     assert mock_post.call_count == 0
@@ -356,7 +358,7 @@ def test_plugin_mailgun_header_check(mock_post):
         'mailgun://user@localhost.localdomain/'
         '{}?from=Luke%20Skywalker'.format(apikey))
     assert isinstance(obj, NotifyMailgun)
-    assert isinstance(obj.url(), str) is True
+    assert isinstance(obj.url(), str)
 
     # No calls made yet
     assert mock_post.call_count == 0
@@ -379,7 +381,7 @@ def test_plugin_mailgun_header_check(mock_post):
         'mailgun://user@localhost.localdomain/{}'
         '?from=Luke%20Skywalker<luke@rebels.com>'.format(apikey))
     assert isinstance(obj, NotifyMailgun)
-    assert isinstance(obj.url(), str) is True
+    assert isinstance(obj.url(), str)
 
     # No calls made yet
     assert mock_post.call_count == 0
@@ -402,7 +404,7 @@ def test_plugin_mailgun_header_check(mock_post):
         'mailgun://user@localhost.localdomain/{}'
         '?from=luke@rebels.com'.format(apikey))
     assert isinstance(obj, NotifyMailgun)
-    assert isinstance(obj.url(), str) is True
+    assert isinstance(obj.url(), str)
 
     # No calls made yet
     assert mock_post.call_count == 0

@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# BSD 3-Clause License
+# BSD 2-Clause License
 #
 # Apprise - Push Notification Library.
-# Copyright (c) 2023, Chris Caron <lead2gold@gmail.com>
+# Copyright (c) 2025, Chris Caron <lead2gold@gmail.com>
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
@@ -13,10 +13,6 @@
 # 2. Redistributions in binary form must reproduce the above copyright notice,
 #    this list of conditions and the following disclaimer in the documentation
 #    and/or other materials provided with the distribution.
-#
-# 3. Neither the name of the copyright holder nor the names of its
-#    contributors may be used to endorse or promote products derived from
-#    this software without specific prior written permission.
 #
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 # AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
@@ -33,7 +29,7 @@
 import re
 from markdown import markdown
 from .common import NotifyFormat
-from .URLBase import URLBase
+from .url import URLBase
 
 from html.parser import HTMLParser
 
@@ -62,8 +58,8 @@ def markdown_to_html(content):
     """
     Converts specified content from markdown to HTML.
     """
-
-    return markdown(content)
+    return markdown(content, extensions=[
+        'markdown.extensions.nl2br', 'markdown.extensions.tables'])
 
 
 def text_to_html(content):
@@ -184,8 +180,10 @@ class HTMLConverter(HTMLParser, object):
             self._result.append('\n')
 
         elif tag == 'hr':
-            if self._result:
+            if self._result and isinstance(self._result[-1], str):
                 self._result[-1] = self._result[-1].rstrip(' ')
+            else:
+                pass
 
             self._result.append('\n---\n')
 

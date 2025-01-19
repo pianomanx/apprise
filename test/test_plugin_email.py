@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# BSD 3-Clause License
+# BSD 2-Clause License
 #
 # Apprise - Push Notification Library.
-# Copyright (c) 2023, Chris Caron <lead2gold@gmail.com>
+# Copyright (c) 2025, Chris Caron <lead2gold@gmail.com>
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
@@ -13,10 +13,6 @@
 # 2. Redistributions in binary form must reproduce the above copyright notice,
 #    this list of conditions and the following disclaimer in the documentation
 #    and/or other materials provided with the distribution.
-#
-# 3. Neither the name of the copyright holder nor the names of its
-#    contributors may be used to endorse or promote products derived from
-#    this software without specific prior written permission.
 #
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 # AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
@@ -31,9 +27,13 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 import logging
+import pytest
 import os
+import shutil
+import sys
 import re
 from unittest import mock
+from inspect import cleandoc
 
 import smtplib
 from email.header import decode_header
@@ -41,13 +41,16 @@ from email.header import decode_header
 from apprise import NotifyType, NotifyBase
 from apprise import Apprise
 from apprise import AttachBase
+from apprise import AppriseAsset
+from apprise import PersistentStoreMode
+from apprise.exception import AppriseException
+from apprise.config import ConfigBase
 from apprise import AppriseAttachment
-from apprise.plugins.NotifyEmail import NotifyEmail
-from apprise.plugins import NotifyEmail as NotifyEmailModule
+from apprise.plugins import email
+from apprise import utils
 
 # Disable logging for a cleaner testing output
 logging.disable(logging.CRITICAL)
-
 
 # Attachment Directory
 TEST_VAR_DIR = os.path.join(os.path.dirname(__file__), 'var')
@@ -57,13 +60,13 @@ TEST_URLS = (
     # NotifyEmail
     ##################################
     ('mailto://', {
-        'instance': None,
+        'instance': TypeError,
     }),
     ('mailtos://', {
-        'instance': None,
+        'instance': TypeError,
     }),
     ('mailto://:@/', {
-        'instance': None
+        'instance': TypeError,
     }),
     # No Username
     ('mailtos://:pass@nuxref.com:567', {
@@ -73,127 +76,137 @@ TEST_URLS = (
 
     # Pre-Configured Email Services
     ('mailto://user:pass@gmail.com', {
-        'instance': NotifyEmail,
+        'instance': email.NotifyEmail,
     }),
     ('mailto://user:pass@hotmail.com', {
-        'instance': NotifyEmail,
+        'instance': email.NotifyEmail,
     }),
     ('mailto://user:pass@live.com', {
-        'instance': NotifyEmail,
+        'instance': email.NotifyEmail,
     }),
     ('mailto://user:pass@prontomail.com', {
-        'instance': NotifyEmail,
+        'instance': email.NotifyEmail,
     }),
     ('mailto://user:pass@yahoo.com', {
-        'instance': NotifyEmail,
+        'instance': email.NotifyEmail,
     }),
     ('mailto://user:pass@yahoo.ca', {
-        'instance': NotifyEmail,
+        'instance': email.NotifyEmail,
     }),
     ('mailto://user:pass@fastmail.com', {
-        'instance': NotifyEmail,
+        'instance': email.NotifyEmail,
     }),
     ('mailto://user:pass@sendgrid.com', {
-        'instance': NotifyEmail,
+        'instance': email.NotifyEmail,
     }),
 
     # Yandex
     ('mailto://user:pass@yandex.com', {
-        'instance': NotifyEmail,
+        'instance': email.NotifyEmail,
     }),
     ('mailto://user:pass@yandex.ru', {
-        'instance': NotifyEmail,
+        'instance': email.NotifyEmail,
     }),
     ('mailto://user:pass@yandex.fr', {
-        'instance': NotifyEmail,
+        'instance': email.NotifyEmail,
     }),
 
     # Custom Emails
     ('mailtos://user:pass@nuxref.com:567', {
-        'instance': NotifyEmail,
+        'instance': email.NotifyEmail,
     }),
     ('mailto://user:pass@nuxref.com?mode=ssl', {
         # mailto:// with mode=ssl causes us to convert to ssl
-        'instance': NotifyEmail,
+        'instance': email.NotifyEmail,
         # Our expected url(privacy=True) startswith() response:
         'privacy_url': 'mailtos://user:****@nuxref.com',
     }),
     ('mailto://user:pass@nuxref.com:567?format=html', {
-        'instance': NotifyEmail,
+        'instance': email.NotifyEmail,
     }),
     ('mailtos://user:pass@nuxref.com:567?to=l2g@nuxref.com', {
-        'instance': NotifyEmail,
+        'instance': email.NotifyEmail,
+    }),
+    ('mailtos://user:pass@domain.com?user=admin@mail-domain.com', {
+        'instance': email.NotifyEmail,
+    }),
+    ('mailtos://%20@domain.com?user=admin@mail-domain.com', {
+        'instance': email.NotifyEmail,
+    }),
+    ('mailtos://%20@domain.com?user=admin@mail-domain.com?pgp=yes', {
+        # Test pgp flag
+        'instance': email.NotifyEmail,
     }),
     ('mailtos://user:pass@nuxref.com:567/l2g@nuxref.com', {
-        'instance': NotifyEmail,
+        'instance': email.NotifyEmail,
     }),
     (
         'mailto://user:pass@example.com:2525?user=l2g@example.com'
         '&pass=l2g@apprise!is!Awesome', {
-            'instance': NotifyEmail,
+            'instance': email.NotifyEmail,
         },
     ),
     (
         'mailto://user:pass@example.com:2525?user=l2g@example.com'
         '&pass=l2g@apprise!is!Awesome&format=text', {
-            'instance': NotifyEmail,
+            'instance': email.NotifyEmail,
         },
     ),
     (
         # Test Carbon Copy
         'mailtos://user:pass@example.com?smtp=smtp.example.com'
         '&name=l2g&cc=noreply@example.com,test@example.com', {
-            'instance': NotifyEmail,
+            'instance': email.NotifyEmail,
         },
     ),
     (
         # Test Blind Carbon Copy
         'mailtos://user:pass@example.com?smtp=smtp.example.com'
         '&name=l2g&bcc=noreply@example.com,test@example.com', {
-            'instance': NotifyEmail,
+            'instance': email.NotifyEmail,
         },
     ),
     (
         # Test Carbon Copy with bad email
         'mailtos://user:pass@example.com?smtp=smtp.example.com'
         '&name=l2g&cc=noreply@example.com,@', {
-            'instance': NotifyEmail,
+            'instance': email.NotifyEmail,
         },
     ),
     (
         # Test Blind Carbon Copy with bad email
         'mailtos://user:pass@example.com?smtp=smtp.example.com'
         '&name=l2g&bcc=noreply@example.com,@', {
-            'instance': NotifyEmail,
+            'instance': email.NotifyEmail,
         },
     ),
     (
         # Test Reply To
         'mailtos://user:pass@example.com?smtp=smtp.example.com'
         '&name=l2g&reply=test@example.com,test2@example.com', {
-            'instance': NotifyEmail,
+            'instance': email.NotifyEmail,
         },
     ),
     (
         # Test Reply To with bad email
         'mailtos://user:pass@example.com?smtp=smtp.example.com'
         '&name=l2g&reply=test@example.com,@', {
-            'instance': NotifyEmail,
+            'instance': email.NotifyEmail,
         },
     ),
     # headers
     ('mailto://user:pass@localhost.localdomain'
         '?+X-Customer-Campaign-ID=Apprise', {
-            'instance': NotifyEmail,
+            'instance': email.NotifyEmail,
         }),
     # No Password
     ('mailtos://user:@nuxref.com', {
-        'instance': NotifyEmail,
+        'instance': email.NotifyEmail,
     }),
     # Invalid From Address; but just gets put as the from name instead
     # Hence the below generats From: "@ <user@nuxref.com>"
     ('mailtos://user:pass@nuxref.com?from=@', {
-        'instance': NotifyEmail,
+        'instance': email.NotifyEmail,
     }),
     # Invalid From Address
     ('mailtos://nuxref.com?user=&pass=.', {
@@ -202,7 +215,7 @@ TEST_URLS = (
     # Invalid To Address is accepted, but we won't be able to properly email
     # using the notify() call
     ('mailtos://user:pass@nuxref.com?to=@', {
-        'instance': NotifyEmail,
+        'instance': email.NotifyEmail,
         'response': False,
     }),
     # Valid URL, but can't structure a proper email
@@ -219,22 +232,22 @@ TEST_URLS = (
     }),
     # STARTTLS flag checking
     ('mailtos://user:pass@gmail.com?mode=starttls', {
-        'instance': NotifyEmail,
+        'instance': email.NotifyEmail,
         # Our expected url(privacy=True) startswith() response:
         'privacy_url': 'mailtos://user:****@gmail.com',
     }),
     # SSL flag checking
     ('mailtos://user:pass@gmail.com?mode=ssl', {
-        'instance': NotifyEmail,
+        'instance': email.NotifyEmail,
     }),
     # Can make a To address using what we have (l2g@nuxref.com)
     ('mailtos://nuxref.com?user=l2g&pass=.', {
-        'instance': NotifyEmail,
+        'instance': email.NotifyEmail,
         # Our expected url(privacy=True) startswith() response:
         'privacy_url': 'mailtos://l2g:****@nuxref.com',
     }),
     ('mailto://user:pass@localhost:2525', {
-        'instance': NotifyEmail,
+        'instance': email.NotifyEmail,
         # Throws a series of connection and transfer exceptions when this flag
         # is set and tests that we gracfully handle them
         'test_smtplib_exceptions': True,
@@ -242,25 +255,25 @@ TEST_URLS = (
     # Use of both 'name' and 'from' together; these are synonymous
     ('mailtos://user:pass@nuxref.com?'
      'from=jack@gmail.com&name=Jason<jason@gmail.com>', {
-         'instance': NotifyEmail}),
+         'instance': email.NotifyEmail}),
     # Test no auth at all
     ('mailto://localhost?from=test@example.com&to=test@example.com', {
-        'instance': NotifyEmail,
+        'instance': email.NotifyEmail,
         'privacy_url': 'mailto://localhost',
     }),
     # Test multi-emails where some are bad
     ('mailto://user:pass@localhost/test@example.com/test2@/$@!/', {
-        'instance': NotifyEmail,
+        'instance': email.NotifyEmail,
         'privacy_url': 'mailto://user:****@localhost/'
     }),
     ('mailto://user:pass@localhost/?bcc=test2@,$@!/', {
-        'instance': NotifyEmail,
+        'instance': email.NotifyEmail,
     }),
     ('mailto://user:pass@localhost/?cc=test2@,$@!/', {
-        'instance': NotifyEmail,
+        'instance': email.NotifyEmail,
     }),
     ('mailto://user:pass@localhost/?reply=test2@,$@!/', {
-        'instance': NotifyEmail,
+        'instance': email.NotifyEmail,
     }),
 )
 
@@ -340,11 +353,17 @@ def test_plugin_email(mock_smtp, mock_smtpssl):
 
             if isinstance(obj, NotifyBase):
                 # We loaded okay; now lets make sure we can reverse this url
-                assert isinstance(obj.url(), str) is True
+                assert isinstance(obj.url(), str)
+
+                # Get our URL Identifier
+                assert isinstance(obj.url_id(), str)
+
+                # Verify we can acquire a target count as an integer
+                assert isinstance(len(obj), int)
 
                 # Test url() with privacy=True
                 assert isinstance(
-                    obj.url(privacy=True), str) is True
+                    obj.url(privacy=True), str)
 
                 # Some Simple Invalid Instance Testing
                 assert instance.parse_url(None) is None
@@ -369,6 +388,12 @@ def test_plugin_email(mock_smtp, mock_smtpssl):
                         url, obj.url()))
                     assert False
 
+                # Verify there is no change from the old and the new
+                assert len(obj) == len(obj_cmp), (
+                    '%d targets found in %s, But %d targets found in %s'
+                    % (len(obj), obj.url(privacy=True), len(obj_cmp),
+                       obj_cmp.url(privacy=True)))
+
             if self:
                 # Iterate over our expected entries inside of our object
                 for key, val in self.items():
@@ -378,10 +403,18 @@ def test_plugin_email(mock_smtp, mock_smtpssl):
 
             try:
                 if test_smtplib_exceptions is False:
+                    # Verify we can acquire a target count as an integer
+                    targets = len(obj)
+
                     # check that we're as expected
                     assert obj.notify(
                         title='test', body='body',
                         notify_type=NotifyType.INFO) == response
+
+                    if response:
+                        # If we successfully got a response, there must have
+                        # been at least 1 target present
+                        assert targets > 0
 
                 else:
                     for exception in test_smtplib_exceptions:
@@ -417,9 +450,12 @@ def test_plugin_email(mock_smtp, mock_smtpssl):
         except Exception as e:
             # Handle our exception
             if instance is None:
+                print('%s generated %s' % (url, str(e)))
                 raise
 
             if not isinstance(e, instance):
+                print('%s Exception (expected %s); got %s' % (
+                    url, str(instance), str(e)))
                 raise
 
 
@@ -432,7 +468,7 @@ def test_plugin_email_webbase_lookup(mock_smtp, mock_smtpssl):
     """
 
     # Insert a test email at the head of our table
-    NotifyEmailModule.EMAIL_TEMPLATES = (
+    email.templates.EMAIL_TEMPLATES = (
         (
             # Testing URL
             'Testing Lookup',
@@ -441,15 +477,15 @@ def test_plugin_email_webbase_lookup(mock_smtp, mock_smtpssl):
                 'port': 123,
                 'smtp_host': 'smtp.l2g.com',
                 'secure': True,
-                'login_type': (NotifyEmailModule.WebBaseLogin.USERID, )
+                'login_type': (email.WebBaseLogin.USERID, )
             },
         ),
-    ) + NotifyEmailModule.EMAIL_TEMPLATES
+    ) + email.templates.EMAIL_TEMPLATES
 
     obj = Apprise.instantiate(
         'mailto://user:pass@l2g.com', suppress_exceptions=True)
 
-    assert isinstance(obj, NotifyEmail)
+    assert isinstance(obj, email.NotifyEmail)
     assert len(obj.targets) == 1
     assert (False, 'user@l2g.com') in obj.targets
     assert obj.from_addr[0] == obj.app_id
@@ -476,7 +512,7 @@ def test_plugin_email_smtplib_init_fail(mock_smtplib):
 
     obj = Apprise.instantiate(
         'mailto://user:pass@gmail.com', suppress_exceptions=False)
-    assert isinstance(obj, NotifyEmail)
+    assert isinstance(obj, email.NotifyEmail)
 
     # Support Exception handling of smtplib.SMTP
     mock_smtplib.side_effect = RuntimeError('Test')
@@ -500,7 +536,7 @@ def test_plugin_email_smtplib_send_okay(mock_smtplib):
     # Defaults to HTML
     obj = Apprise.instantiate(
         'mailto://user:pass@gmail.com', suppress_exceptions=False)
-    assert isinstance(obj, NotifyEmail)
+    assert isinstance(obj, email.NotifyEmail)
 
     # Support an email simulation where we can correctly quit
     mock_smtplib.starttls.return_value = True
@@ -514,7 +550,7 @@ def test_plugin_email_smtplib_send_okay(mock_smtplib):
     # Set Text
     obj = Apprise.instantiate(
         'mailto://user:pass@gmail.com?format=text', suppress_exceptions=False)
-    assert isinstance(obj, NotifyEmail)
+    assert isinstance(obj, email.NotifyEmail)
 
     assert obj.notify(
         body='body', title='test', notify_type=NotifyType.INFO) is True
@@ -568,7 +604,7 @@ def test_plugin_email_smtplib_send_multiple_recipients(mock_smtplib):
         'mailto://user:pass@mail.example.org?'
         'to=foo@example.net,bar@example.com&'
         'cc=baz@example.org&bcc=qux@example.org', suppress_exceptions=False)
-    assert isinstance(obj, NotifyEmail)
+    assert isinstance(obj, email.NotifyEmail)
 
     assert obj.notify(
         body='body', title='test', notify_type=NotifyType.INFO) is True
@@ -616,7 +652,7 @@ def test_plugin_email_smtplib_internationalization(mock_smtp):
     obj = Apprise.instantiate(
         'mailto://user:pass@gmail.com?name=Например%20так',
         suppress_exceptions=False)
-    assert isinstance(obj, NotifyEmail)
+    assert isinstance(obj, email.NotifyEmail)
 
     class SMTPMock:
         def sendmail(self, *args, **kwargs):
@@ -680,10 +716,10 @@ def test_plugin_email_url_escaping():
     # So the above translates to ' %20' (a space in front of %20).  We want
     # to verify the handling of the password escaping and when it happens.
     # a very bad response would be '  ' (double space)
-    obj = NotifyEmail.parse_url(
+    obj = email.NotifyEmail.parse_url(
         'mailto://user:{}@gmail.com?format=text'.format(passwd))
 
-    assert isinstance(obj, dict) is True
+    assert isinstance(obj, dict)
     assert 'password' in obj
 
     # Escaping doesn't happen at this stage because we want to leave this to
@@ -693,7 +729,7 @@ def test_plugin_email_url_escaping():
     obj = Apprise.instantiate(
         'mailto://user:{}@gmail.com?format=text'.format(passwd),
         suppress_exceptions=False)
-    assert isinstance(obj, NotifyEmail) is True
+    assert isinstance(obj, email.NotifyEmail)
 
     # The password is escaped only 'once'
     assert obj.password == ' %20'
@@ -711,7 +747,7 @@ def test_plugin_email_url_variations():
             user='apprise%40example21.ca',
             passwd='abcd123'),
         suppress_exceptions=False)
-    assert isinstance(obj, NotifyEmail) is True
+    assert isinstance(obj, email.NotifyEmail)
 
     assert obj.password == 'abcd123'
     assert obj.user == 'apprise@example21.ca'
@@ -734,7 +770,7 @@ def test_plugin_email_url_variations():
             user='apprise%40example21.ca',
             passwd='abcd123'),
         suppress_exceptions=False)
-    assert isinstance(obj, NotifyEmail) is True
+    assert isinstance(obj, email.NotifyEmail)
 
     assert obj.password == 'abcd123'
     assert obj.user == 'apprise@example21.ca'
@@ -756,7 +792,7 @@ def test_plugin_email_url_variations():
             user='apprise%40example21.ca',
             passwd='abcd123'),
         suppress_exceptions=False)
-    assert isinstance(obj, NotifyEmail) is True
+    assert isinstance(obj, email.NotifyEmail)
 
     assert obj.password == 'abcd123'
     assert obj.user == 'apprise@example21.ca'
@@ -786,7 +822,7 @@ def test_plugin_email_url_variations():
             user='apprise%40example21.ca',
             passwd='abcd123'),
         suppress_exceptions=False)
-    assert isinstance(obj, NotifyEmail) is True
+    assert isinstance(obj, email.NotifyEmail)
 
     assert obj.password == 'abcd123'
     assert obj.user == 'apprise@example21.ca'
@@ -820,7 +856,7 @@ def test_plugin_email_url_variations():
             that='to@example.jp',
             smtp_host='smtp.example.edu'),
         suppress_exceptions=False)
-    assert isinstance(obj, NotifyEmail) is True
+    assert isinstance(obj, email.NotifyEmail)
 
     assert obj.password == 'abcd123'
     assert obj.user == 'apprise@example21.ca'
@@ -842,7 +878,7 @@ def test_plugin_email_url_variations():
 
         obj = Apprise.instantiate(
             'mailto://user:pass@domain.com{}'.format(toaddr))
-        assert isinstance(obj, NotifyEmail) is True
+        assert isinstance(obj, email.NotifyEmail)
         assert obj.password == 'pass'
         assert obj.user == 'user'
         assert obj.host == 'domain.com'
@@ -865,7 +901,7 @@ def test_plugin_email_dict_variations():
         'user': 'apprise@example.com',
         'password': 'abd123',
         'host': 'example.com'}, suppress_exceptions=False)
-    assert isinstance(obj, NotifyEmail) is True
+    assert isinstance(obj, email.NotifyEmail)
 
 
 @mock.patch('smtplib.SMTP_SSL')
@@ -883,7 +919,7 @@ def test_plugin_email_url_parsing(mock_smtp, mock_smtp_ssl):
     # Test variations of username required to be an email address
     # user@example.com; we also test an over-ride port on a template driven
     # mailto:// entry
-    results = NotifyEmail.parse_url(
+    results = email.NotifyEmail.parse_url(
         'mailtos://user:pass123@hotmail.com:444'
         '?to=user2@yahoo.com&name=test%20name')
     assert isinstance(results, dict)
@@ -895,7 +931,7 @@ def test_plugin_email_url_parsing(mock_smtp, mock_smtp_ssl):
     assert 'user2@yahoo.com' in results['targets']
 
     obj = Apprise.instantiate(results, suppress_exceptions=False)
-    assert isinstance(obj, NotifyEmail) is True
+    assert isinstance(obj, email.NotifyEmail)
 
     assert mock_smtp.call_count == 0
     assert mock_smtp_ssl.call_count == 0
@@ -932,7 +968,7 @@ def test_plugin_email_url_parsing(mock_smtp, mock_smtp_ssl):
     # The below switches the `name` with the `to` to verify the results
     # are the same; it also verfies that the mode gets changed to SSL
     # instead of STARTTLS
-    results = NotifyEmail.parse_url(
+    results = email.NotifyEmail.parse_url(
         'mailtos://user:pass123@hotmail.com?smtp=override.com'
         '&name=test%20name&to=user2@yahoo.com&mode=ssl')
     assert isinstance(results, dict)
@@ -943,7 +979,7 @@ def test_plugin_email_url_parsing(mock_smtp, mock_smtp_ssl):
     assert 'user2@yahoo.com' in results['targets']
     assert 'ssl' == results['secure_mode']
     obj = Apprise.instantiate(results, suppress_exceptions=False)
-    assert isinstance(obj, NotifyEmail) is True
+    assert isinstance(obj, email.NotifyEmail)
 
     assert mock_smtp.call_count == 0
     assert mock_smtp_ssl.call_count == 0
@@ -986,10 +1022,10 @@ def test_plugin_email_url_parsing(mock_smtp, mock_smtp_ssl):
     #
     # Test outlook/hotmail lookups
     #
-    results = NotifyEmail.parse_url(
+    results = email.NotifyEmail.parse_url(
         'mailtos://user:pass123@hotmail.com')
     obj = Apprise.instantiate(results, suppress_exceptions=False)
-    assert isinstance(obj, NotifyEmail) is True
+    assert isinstance(obj, email.NotifyEmail)
     assert obj.smtp_host == 'smtp-mail.outlook.com'
     # No entries in the reply_to
     assert not obj.reply_to
@@ -1012,10 +1048,10 @@ def test_plugin_email_url_parsing(mock_smtp, mock_smtp_ssl):
     mock_smtp_ssl.reset_mock()
     response.reset_mock()
 
-    results = NotifyEmail.parse_url(
+    results = email.NotifyEmail.parse_url(
         'mailtos://user:pass123@outlook.com')
     obj = Apprise.instantiate(results, suppress_exceptions=False)
-    assert isinstance(obj, NotifyEmail) is True
+    assert isinstance(obj, email.NotifyEmail)
     assert obj.smtp_host == 'smtp.outlook.com'
     # No entries in the reply_to
     assert not obj.reply_to
@@ -1038,10 +1074,10 @@ def test_plugin_email_url_parsing(mock_smtp, mock_smtp_ssl):
     mock_smtp_ssl.reset_mock()
     response.reset_mock()
 
-    results = NotifyEmail.parse_url(
+    results = email.NotifyEmail.parse_url(
         'mailtos://user:pass123@outlook.com.au')
     obj = Apprise.instantiate(results, suppress_exceptions=False)
-    assert isinstance(obj, NotifyEmail) is True
+    assert isinstance(obj, email.NotifyEmail)
     assert obj.smtp_host == 'smtp.outlook.com'
     # No entries in the reply_to
     assert not obj.reply_to
@@ -1065,11 +1101,11 @@ def test_plugin_email_url_parsing(mock_smtp, mock_smtp_ssl):
     response.reset_mock()
 
     # Consisitency Checks
-    results = NotifyEmail.parse_url(
+    results = email.NotifyEmail.parse_url(
         'mailtos://outlook.com?smtp=smtp.outlook.com'
         '&user=user@outlook.com&pass=app.pw')
     obj1 = Apprise.instantiate(results, suppress_exceptions=False)
-    assert isinstance(obj1, NotifyEmail) is True
+    assert isinstance(obj1, email.NotifyEmail)
     assert obj1.smtp_host == 'smtp.outlook.com'
     assert obj1.user == 'user@outlook.com'
     assert obj1.password == 'app.pw'
@@ -1094,10 +1130,10 @@ def test_plugin_email_url_parsing(mock_smtp, mock_smtp_ssl):
     mock_smtp_ssl.reset_mock()
     response.reset_mock()
 
-    results = NotifyEmail.parse_url(
+    results = email.NotifyEmail.parse_url(
         'mailtos://user:app.pw@outlook.com')
     obj2 = Apprise.instantiate(results, suppress_exceptions=False)
-    assert isinstance(obj2, NotifyEmail) is True
+    assert isinstance(obj2, email.NotifyEmail)
     assert obj2.smtp_host == obj1.smtp_host
     assert obj2.user == obj1.user
     assert obj2.password == obj1.password
@@ -1122,10 +1158,38 @@ def test_plugin_email_url_parsing(mock_smtp, mock_smtp_ssl):
     mock_smtp_ssl.reset_mock()
     response.reset_mock()
 
-    results = NotifyEmail.parse_url(
+    results = email.NotifyEmail.parse_url(
+        'mailto://user:pass@comcast.net')
+    obj = Apprise.instantiate(results, suppress_exceptions=False)
+    assert isinstance(obj, email.NotifyEmail)
+    assert obj.smtp_host == 'smtp.comcast.net'
+    assert obj.user == 'user@comcast.net'
+    assert obj.password == 'pass'
+    assert obj.secure_mode == 'ssl'
+    assert obj.port == 465
+
+    assert mock_smtp.call_count == 0
+    assert mock_smtp_ssl.call_count == 0
+    assert response.starttls.call_count == 0
+    assert obj.notify("test") is True
+    assert mock_smtp.call_count == 0
+    assert mock_smtp_ssl.call_count == 1
+    assert response.starttls.call_count == 0
+    assert response.login.call_count == 1
+    assert response.sendmail.call_count == 1
+
+    user, pw = response.login.call_args[0]
+    assert pw == 'pass'
+    assert user == 'user@comcast.net'
+
+    mock_smtp.reset_mock()
+    mock_smtp_ssl.reset_mock()
+    response.reset_mock()
+
+    results = email.NotifyEmail.parse_url(
         'mailtos://user:pass123@live.com')
     obj = Apprise.instantiate(results, suppress_exceptions=False)
-    assert isinstance(obj, NotifyEmail) is True
+    assert isinstance(obj, email.NotifyEmail)
     # No entries in the reply_to
     assert not obj.reply_to
 
@@ -1147,10 +1211,10 @@ def test_plugin_email_url_parsing(mock_smtp, mock_smtp_ssl):
     mock_smtp_ssl.reset_mock()
     response.reset_mock()
 
-    results = NotifyEmail.parse_url(
+    results = email.NotifyEmail.parse_url(
         'mailtos://user:pass123@hotmail.com')
     obj = Apprise.instantiate(results, suppress_exceptions=False)
-    assert isinstance(obj, NotifyEmail) is True
+    assert isinstance(obj, email.NotifyEmail)
     # No entries in the reply_to
     assert not obj.reply_to
 
@@ -1175,11 +1239,11 @@ def test_plugin_email_url_parsing(mock_smtp, mock_smtp_ssl):
     #
     # Test Port Over-Riding
     #
-    results = NotifyEmail.parse_url(
+    results = email.NotifyEmail.parse_url(
         "mailtos://abc:password@xyz.cn:465?"
         "smtp=smtp.exmail.qq.com&mode=ssl")
     obj = Apprise.instantiate(results, suppress_exceptions=False)
-    assert isinstance(obj, NotifyEmail) is True
+    assert isinstance(obj, email.NotifyEmail)
 
     # Verify our over-rides are in place
     assert obj.smtp_host == 'smtp.exmail.qq.com'
@@ -1219,11 +1283,11 @@ def test_plugin_email_url_parsing(mock_smtp, mock_smtp_ssl):
     mock_smtp_ssl.reset_mock()
     response.reset_mock()
 
-    results = NotifyEmail.parse_url(
+    results = email.NotifyEmail.parse_url(
         "mailtos://abc:password@xyz.cn?"
         "smtp=smtp.exmail.qq.com&mode=ssl&port=465")
     obj = Apprise.instantiate(results, suppress_exceptions=False)
-    assert isinstance(obj, NotifyEmail) is True
+    assert isinstance(obj, email.NotifyEmail)
 
     # Verify our over-rides are in place
     assert obj.smtp_host == 'smtp.exmail.qq.com'
@@ -1255,10 +1319,10 @@ def test_plugin_email_url_parsing(mock_smtp, mock_smtp_ssl):
     #
     # Test Reply-To Email
     #
-    results = NotifyEmail.parse_url(
+    results = email.NotifyEmail.parse_url(
         "mailtos://user:pass@example.com?reply=noreply@example.com")
     obj = Apprise.instantiate(results, suppress_exceptions=False)
-    assert isinstance(obj, NotifyEmail) is True
+    assert isinstance(obj, email.NotifyEmail)
     # Verify our over-rides are in place
     assert obj.smtp_host == 'example.com'
     assert obj.from_addr[0] == obj.app_id
@@ -1290,10 +1354,10 @@ def test_plugin_email_url_parsing(mock_smtp, mock_smtp_ssl):
     #
     # Test Reply-To Email with Name Inline
     #
-    results = NotifyEmail.parse_url(
+    results = email.NotifyEmail.parse_url(
         "mailtos://user:pass@example.com?reply=Chris<noreply@example.ca>")
     obj = Apprise.instantiate(results, suppress_exceptions=False)
-    assert isinstance(obj, NotifyEmail) is True
+    assert isinstance(obj, email.NotifyEmail)
     # Verify our over-rides are in place
     assert obj.smtp_host == 'example.com'
     assert obj.from_addr[0] == obj.app_id
@@ -1327,7 +1391,7 @@ def test_plugin_email_url_parsing(mock_smtp, mock_smtp_ssl):
     # Test variations of username required to be an email address
     # user@example.com; we also test an over-ride port on a template driven
     # mailto:// entry
-    results = NotifyEmail.parse_url(
+    results = email.NotifyEmail.parse_url(
         'mailto://fastmail.com/?to=hello@concordium-explorer.nl'
         '&user=joe@mydomain.nl&pass=abc123'
         '&from=Concordium Explorer Bot<bot@concordium-explorer.nl>')
@@ -1341,7 +1405,7 @@ def test_plugin_email_url_parsing(mock_smtp, mock_smtp_ssl):
     assert 'hello@concordium-explorer.nl' in results['targets']
 
     obj = Apprise.instantiate(results, suppress_exceptions=False)
-    assert isinstance(obj, NotifyEmail) is True
+    assert isinstance(obj, email.NotifyEmail)
 
     assert mock_smtp.call_count == 0
     assert mock_smtp_ssl.call_count == 0
@@ -1368,6 +1432,168 @@ def test_plugin_email_url_parsing(mock_smtp, mock_smtp_ssl):
     assert pw == 'abc123'
     assert user == 'joe@mydomain.nl'
 
+    mock_smtp.reset_mock()
+    mock_smtp_ssl.reset_mock()
+    response.reset_mock()
+
+    # Issue github.com/caronc/apprise/issue/1040
+    #  mailto://fastmail.com?user=username@customdomain.com \
+    #          &to=username@customdomain.com&pass=password123
+    #
+    # should just have to be written like (to= omitted)
+    #  mailto://fastmail.com?user=username@customdomain.com&pass=password123
+    #
+    results = email.NotifyEmail.parse_url(
+        'mailto://fastmail.com?user=username@customdomain.com'
+        '&pass=password123')
+    assert isinstance(results, dict)
+    assert 'username@customdomain.com' == results['user']
+    assert results['from_addr'] == ''
+    assert results['port'] is None
+    assert 'fastmail.com' == results['host']
+    assert 'password123' == results['password']
+    assert results['smtp_host'] == ''
+
+    obj = Apprise.instantiate(results, suppress_exceptions=False)
+    assert isinstance(obj, email.NotifyEmail)
+    # During instantiation, our variables get detected
+    assert obj.smtp_host == 'smtp.fastmail.com'
+    assert obj.from_addr == ['Apprise', 'username@customdomain.com']
+    assert obj.host == 'customdomain.com'
+    # detected from
+    assert (False, 'username@customdomain.com') in obj.targets
+
+    assert mock_smtp.call_count == 0
+    assert mock_smtp_ssl.call_count == 0
+    assert obj.notify("test") is True
+    assert mock_smtp.call_count == 0
+    assert mock_smtp_ssl.call_count == 1
+    assert response.starttls.call_count == 0
+    assert response.login.call_count == 1
+    assert response.sendmail.call_count == 1
+    # Store our Sent Arguments
+    # Syntax is:
+    #  sendmail(from_addr, to_addrs, msg, mail_options=(), rcpt_options=())
+    #             [0]        [1]     [2]
+    _from = response.sendmail.call_args[0][0]
+    _to = response.sendmail.call_args[0][1]
+    _msg = response.sendmail.call_args[0][2]
+    assert _from == 'username@customdomain.com'
+    assert isinstance(_to, list)
+    assert len(_to) == 1
+    assert _to[0] == 'username@customdomain.com'
+    assert _msg.split('\n')[-3] == 'test'
+
+    user, pw = response.login.call_args[0]
+    assert pw == 'password123'
+    assert user == 'username@customdomain.com'
+
+    mock_smtp.reset_mock()
+    mock_smtp_ssl.reset_mock()
+    response.reset_mock()
+
+    # Similar test as above, just showing that we can over-ride the From=
+    # with these custom URLs as well and not require a full email
+    results = email.NotifyEmail.parse_url(
+        'mailto://fastmail.com?user=username@customdomain.com'
+        '&pass=password123&from=Custom')
+    assert isinstance(results, dict)
+    assert 'username@customdomain.com' == results['user']
+    assert results['from_addr'] == 'Custom'
+    assert results['port'] is None
+    assert 'fastmail.com' == results['host']
+    assert 'password123' == results['password']
+    assert results['smtp_host'] == ''
+
+    obj = Apprise.instantiate(results, suppress_exceptions=False)
+    assert isinstance(obj, email.NotifyEmail)
+    # During instantiation, our variables get detected
+    assert obj.smtp_host == 'smtp.fastmail.com'
+    assert obj.from_addr == ['Custom', 'username@customdomain.com']
+    assert obj.host == 'customdomain.com'
+    # detected from
+    assert (False, 'username@customdomain.com') in obj.targets
+
+    assert mock_smtp.call_count == 0
+    assert mock_smtp_ssl.call_count == 0
+    assert obj.notify("test") is True
+    assert mock_smtp.call_count == 0
+    assert mock_smtp_ssl.call_count == 1
+    assert response.starttls.call_count == 0
+    assert response.login.call_count == 1
+    assert response.sendmail.call_count == 1
+    # Store our Sent Arguments
+    # Syntax is:
+    #  sendmail(from_addr, to_addrs, msg, mail_options=(), rcpt_options=())
+    #             [0]        [1]     [2]
+    _from = response.sendmail.call_args[0][0]
+    _to = response.sendmail.call_args[0][1]
+    _msg = response.sendmail.call_args[0][2]
+    assert _from == 'username@customdomain.com'
+    assert isinstance(_to, list)
+    assert len(_to) == 1
+    assert _to[0] == 'username@customdomain.com'
+    assert _msg.split('\n')[-3] == 'test'
+
+    user, pw = response.login.call_args[0]
+    assert pw == 'password123'
+    assert user == 'username@customdomain.com'
+
+    mock_smtp.reset_mock()
+    mock_smtp_ssl.reset_mock()
+    response.reset_mock()
+
+    # Issue github.com/caronc/apprise/issue/941
+
+    # mail domain = mail-domain.com
+    # host domain = domain.subdomain.com
+    # PASSWORD needs to be fetched since a user= was provided
+    #  - this is an edge case that is tested here
+    results = email.NotifyEmail.parse_url(
+        'mailtos://PASSWORD@domain.subdomain.com:587?'
+        'user=admin@mail-domain.com&to=mail@mail-domain.com')
+    assert isinstance(results, dict)
+    # From_Addr could not be detected at this stage, but will be
+    # handled during instantiation
+    assert '' == results['from_addr']
+    assert 'admin@mail-domain.com' == results['user']
+    assert results['port'] == 587
+    assert 'domain.subdomain.com' == results['host']
+    assert 'PASSWORD' == results['password']
+    assert 'mail@mail-domain.com' in results['targets']
+
+    obj = Apprise.instantiate(results, suppress_exceptions=False)
+    assert isinstance(obj, email.NotifyEmail)
+
+    # Not that our from_address takes on 'admin@domain.subdomain.com'
+    assert obj.from_addr == ['Apprise', 'admin@domain.subdomain.com']
+
+    assert mock_smtp.call_count == 0
+    assert mock_smtp_ssl.call_count == 0
+    assert response.starttls.call_count == 0
+    assert obj.notify("test") is True
+    assert mock_smtp.call_count == 1
+    assert response.starttls.call_count == 1
+    assert mock_smtp_ssl.call_count == 0
+    assert response.login.call_count == 1
+    assert response.sendmail.call_count == 1
+    # Store our Sent Arguments
+    # Syntax is:
+    #  sendmail(from_addr, to_addrs, msg, mail_options=(), rcpt_options=())
+    #             [0]        [1]     [2]
+    _from = response.sendmail.call_args[0][0]
+    _to = response.sendmail.call_args[0][1]
+    _msg = response.sendmail.call_args[0][2]
+    assert _from == 'admin@domain.subdomain.com'
+    assert isinstance(_to, list)
+    assert len(_to) == 1
+    assert _to[0] == 'mail@mail-domain.com'
+    assert _msg.split('\n')[-3] == 'test'
+
+    user, pw = response.login.call_args[0]
+    assert user == 'admin@mail-domain.com'
+    assert pw == 'PASSWORD'
+
 
 @mock.patch('smtplib.SMTP_SSL')
 @mock.patch('smtplib.SMTP')
@@ -1383,7 +1609,7 @@ def test_plugin_email_plus_in_toemail(mock_smtp, mock_smtp_ssl):
 
     # We want to test the case where a + is found in the To address; we want to
     # ensure that it is supported
-    results = NotifyEmail.parse_url(
+    results = email.NotifyEmail.parse_url(
         'mailtos://user:pass123@gmail.com'
         '?to=Plus Support<test+notification@gmail.com>')
     assert isinstance(results, dict)
@@ -1394,10 +1620,13 @@ def test_plugin_email_plus_in_toemail(mock_smtp, mock_smtp_ssl):
     assert 'Plus Support<test+notification@gmail.com>' in results['targets']
 
     obj = Apprise.instantiate(results, suppress_exceptions=False)
-    assert isinstance(obj, NotifyEmail) is True
+    assert isinstance(obj, email.NotifyEmail)
 
     assert len(obj.targets) == 1
     assert ('Plus Support', 'test+notification@gmail.com') in obj.targets
+    assert obj.smtp_host == 'smtp.gmail.com'
+    assert obj.from_addr == ['Apprise', 'user@gmail.com']
+    assert obj.host == 'gmail.com'
 
     assert mock_smtp.call_count == 0
     assert mock_smtp_ssl.call_count == 0
@@ -1428,7 +1657,7 @@ def test_plugin_email_plus_in_toemail(mock_smtp, mock_smtp_ssl):
     # Perform the same test where the To field jsut contains the + in the
     # address
     #
-    results = NotifyEmail.parse_url(
+    results = email.NotifyEmail.parse_url(
         'mailtos://user:pass123@gmail.com'
         '?to=test+notification@gmail.com')
     assert isinstance(results, dict)
@@ -1439,7 +1668,7 @@ def test_plugin_email_plus_in_toemail(mock_smtp, mock_smtp_ssl):
     assert 'test+notification@gmail.com' in results['targets']
 
     obj = Apprise.instantiate(results, suppress_exceptions=False)
-    assert isinstance(obj, NotifyEmail) is True
+    assert isinstance(obj, email.NotifyEmail)
 
     assert len(obj.targets) == 1
     assert (False, 'test+notification@gmail.com') in obj.targets
@@ -1472,7 +1701,7 @@ def test_plugin_email_plus_in_toemail(mock_smtp, mock_smtp_ssl):
     #
     # Perform the same test where the To field is in the URL itself
     #
-    results = NotifyEmail.parse_url(
+    results = email.NotifyEmail.parse_url(
         'mailtos://user:pass123@gmail.com'
         '/test+notification@gmail.com')
     assert isinstance(results, dict)
@@ -1483,7 +1712,7 @@ def test_plugin_email_plus_in_toemail(mock_smtp, mock_smtp_ssl):
     assert 'test+notification@gmail.com' in results['targets']
 
     obj = Apprise.instantiate(results, suppress_exceptions=False)
-    assert isinstance(obj, NotifyEmail) is True
+    assert isinstance(obj, email.NotifyEmail)
 
     assert len(obj.targets) == 1
     assert (False, 'test+notification@gmail.com') in obj.targets
@@ -1508,3 +1737,724 @@ def test_plugin_email_plus_in_toemail(mock_smtp, mock_smtp_ssl):
     assert len(_to) == 1
     assert _to[0] == 'test+notification@gmail.com'
     assert _msg.split('\n')[-3] == 'test'
+
+
+@mock.patch('smtplib.SMTP_SSL')
+@mock.patch('smtplib.SMTP')
+def test_plugin_email_formatting_990(mock_smtp, mock_smtp_ssl):
+    """
+    NotifyEmail() GitHub Issue 990
+    https://github.com/caronc/apprise/issues/990
+    Email formatting not working correctly
+
+    """
+
+    response = mock.Mock()
+    mock_smtp_ssl.return_value = response
+    mock_smtp.return_value = response
+
+    results = email.NotifyEmail.parse_url(
+        'mailtos://mydomain.com?smtp=mail.local.mydomain.com'
+        '&user=noreply@mydomain.com&pass=mypassword'
+        '&from=noreply@mydomain.com&to=me@mydomain.com&mode=ssl&port=465')
+
+    assert isinstance(results, dict)
+    assert 'noreply@mydomain.com' == results['user']
+    assert 'mydomain.com' == results['host']
+    assert 'mail.local.mydomain.com' == results['smtp_host']
+    assert 'mypassword' == results['password']
+    assert 'ssl' == results['secure_mode']
+    assert '465' == results['port']
+    assert 'me@mydomain.com' in results['targets']
+
+    obj = Apprise.instantiate(results, suppress_exceptions=False)
+    assert isinstance(obj, email.NotifyEmail)
+
+    assert len(obj.targets) == 1
+    assert (False, 'me@mydomain.com') in obj.targets
+
+
+def test_plugin_email_variables_1087():
+    """
+    NotifyEmail() GitHub Issue 1087
+    https://github.com/caronc/apprise/issues/1087
+    Email variables reported not working correctly
+
+    """
+
+    # Valid Configuration
+    result, _ = ConfigBase.config_parse(cleandoc("""
+    #
+    # Test Email Parsing
+    #
+    urls:
+      - mailtos://alt.lan/:
+        - user: testuser@alt.lan
+          pass: xxxxXXXxxx
+          smtp: smtp.alt.lan
+          to: alteriks@alt.lan
+    """), asset=AppriseAsset())
+
+    assert isinstance(result, list)
+    assert len(result) == 1
+
+    email = result[0]
+    assert email.from_addr == ['Apprise', 'testuser@alt.lan']
+    assert email.user == 'testuser@alt.lan'
+    assert email.smtp_host == 'smtp.alt.lan'
+    assert email.targets == [(False, 'alteriks@alt.lan')]
+    assert email.password == 'xxxxXXXxxx'
+
+    # Valid Configuration
+    result, _ = ConfigBase.config_parse(cleandoc("""
+    #
+    # Test Email Parsing where qsd over-rides all
+    #
+    urls:
+      - mailtos://alt.lan/?pass=abcd&user=joe@alt.lan:
+        - user: testuser@alt.lan
+          pass: xxxxXXXxxx
+          smtp: smtp.alt.lan
+          to: alteriks@alt.lan
+    """), asset=AppriseAsset())
+
+    assert isinstance(result, list)
+    assert len(result) == 1
+
+    email = result[0]
+    assert email.from_addr == ['Apprise', 'joe@alt.lan']
+    assert email.user == 'joe@alt.lan'
+    assert email.smtp_host == 'smtp.alt.lan'
+    assert email.targets == [(False, 'alteriks@alt.lan')]
+    assert email.password == 'abcd'
+
+
+@mock.patch('smtplib.SMTP_SSL')
+@mock.patch('smtplib.SMTP')
+def test_plugin_host_detection_from_source_email(mock_smtp, mock_smtp_ssl):
+    """
+    NotifyEmail() Discord Issue reporting that the following did not work:
+     mailtos://?smtp=mobile.charter.net&pass=password&user=name@spectrum.net
+
+    """
+
+    response = mock.Mock()
+    mock_smtp_ssl.return_value = response
+    mock_smtp.return_value = response
+
+    results = email.NotifyEmail.parse_url(
+        'mailtos://spectrum.net?smtp=mobile.charter.net'
+        '&pass=password&user=name@spectrum.net')
+
+    assert isinstance(results, dict)
+    assert 'name@spectrum.net' == results['user']
+    assert 'spectrum.net' == results['host']
+    assert 'mobile.charter.net' == results['smtp_host']
+    assert 'password' == results['password']
+
+    obj = Apprise.instantiate(results, suppress_exceptions=False)
+    assert isinstance(obj, email.NotifyEmail) is True
+
+    assert len(obj.targets) == 1
+    assert (False, 'name@spectrum.net') in obj.targets
+    assert obj.from_addr[0] == obj.app_id
+    assert obj.from_addr[1] == 'name@spectrum.net'
+    assert obj.password == 'password'
+    assert obj.user == 'name@spectrum.net'
+    assert obj.secure is True
+    assert obj.port == 587
+    assert obj.smtp_host == 'mobile.charter.net'
+
+    assert mock_smtp.call_count == 0
+    assert mock_smtp_ssl.call_count == 0
+    assert obj.notify('body', 'title') is True
+
+    assert mock_smtp.call_count == 1
+    assert mock_smtp_ssl.call_count == 0
+    assert response.starttls.call_count == 1
+    assert response.login.call_count == 1
+    assert response.sendmail.call_count == 1
+    # Store our Sent Arguments
+    # Syntax is:
+    #  sendmail(from_addr, to_addrs, msg, mail_options=(), rcpt_options=())
+    #             [0]        [1]     [2]
+    _from = response.sendmail.call_args[0][0]
+    _to = response.sendmail.call_args[0][1]
+    _msg = response.sendmail.call_args[0][2]
+    assert _from == 'name@spectrum.net'
+    assert isinstance(_to, list)
+    assert len(_to) == 1
+    assert _to[0] == 'name@spectrum.net'
+    assert _msg.split('\n')[-3] == 'body'
+
+    #
+    # Now let's do a shortened version of the same URL where the host isn't
+    # specified but is parseable from he user login
+    #
+    mock_smtp.reset_mock()
+    mock_smtp_ssl.reset_mock()
+    response.reset_mock()
+
+    results = email.NotifyEmail.parse_url(
+        'mailtos://?smtp=mobile.charter.net'
+        '&pass=password&user=name@spectrum.net')
+
+    assert isinstance(results, dict)
+    assert 'name@spectrum.net' == results['user']
+    assert '' == results['host']  # No hostname defined; it's detected later
+    assert 'mobile.charter.net' == results['smtp_host']
+    assert 'password' == results['password']
+
+    obj = Apprise.instantiate(results, suppress_exceptions=False)
+    assert isinstance(obj, email.NotifyEmail) is True
+
+    assert len(obj.targets) == 1
+    assert (False, 'name@spectrum.net') in obj.targets
+    assert obj.from_addr[0] == obj.app_id
+    assert obj.from_addr[1] == 'name@spectrum.net'
+    assert obj.password == 'password'
+    assert obj.user == 'name@spectrum.net'
+    assert obj.secure is True
+    assert obj.port == 587
+    assert obj.smtp_host == 'mobile.charter.net'
+
+    assert mock_smtp.call_count == 0
+    assert mock_smtp_ssl.call_count == 0
+    assert obj.notify('body', 'title') is True
+
+    assert mock_smtp.call_count == 1
+    assert mock_smtp_ssl.call_count == 0
+    assert response.starttls.call_count == 1
+    assert response.login.call_count == 1
+    assert response.sendmail.call_count == 1
+    # Store our Sent Arguments
+    # Syntax is:
+    #  sendmail(from_addr, to_addrs, msg, mail_options=(), rcpt_options=())
+    #             [0]        [1]     [2]
+    _from = response.sendmail.call_args[0][0]
+    _to = response.sendmail.call_args[0][1]
+    _msg = response.sendmail.call_args[0][2]
+    assert _from == 'name@spectrum.net'
+    assert isinstance(_to, list)
+    assert len(_to) == 1
+    assert _to[0] == 'name@spectrum.net'
+    assert _msg.split('\n')[-3] == 'body'
+
+    #
+    # Now let's do a shortened version of the same URL where the host isn't
+    # specified but is parseable from he user login
+    #
+    mock_smtp.reset_mock()
+    mock_smtp_ssl.reset_mock()
+    response.reset_mock()
+
+    results = email.NotifyEmail.parse_url(
+        'mailtos://?smtp=mobile.charter.net'
+        '&pass=password&user=userid-without-domain')
+
+    assert isinstance(results, dict)
+    assert 'userid-without-domain' == results['user']
+    assert '' == results['host']  # No hostname defined
+    assert 'mobile.charter.net' == results['smtp_host']
+    assert 'password' == results['password']
+
+    with pytest.raises(TypeError):
+        # We will fail
+        Apprise.instantiate(results, suppress_exceptions=False)
+
+    #
+    # Now support target emails in place of the hostname
+    #
+
+    mock_smtp.reset_mock()
+    mock_smtp_ssl.reset_mock()
+    response.reset_mock()
+
+    results = email.NotifyEmail.parse_url(
+        'mailtos://John Doe<john%40yahoo.ca>?smtp=mobile.charter.net'
+        '&pass=password&user=name@spectrum.net')
+
+    assert isinstance(results, dict)
+    assert 'name@spectrum.net' == results['user']
+    assert '' == results['host']  # No hostname defined; it's detected later
+    assert 'mobile.charter.net' == results['smtp_host']
+    assert 'password' == results['password']
+
+    obj = Apprise.instantiate(results, suppress_exceptions=False)
+    assert isinstance(obj, email.NotifyEmail) is True
+
+    assert len(obj.targets) == 1
+    assert ('John Doe', 'john@yahoo.ca') in obj.targets
+    assert obj.from_addr[0] == obj.app_id
+    assert obj.from_addr[1] == 'name@spectrum.net'
+    assert obj.password == 'password'
+    assert obj.user == 'name@spectrum.net'
+    assert obj.secure is True
+    assert obj.port == 587
+    assert obj.smtp_host == 'mobile.charter.net'
+
+    assert mock_smtp.call_count == 0
+    assert mock_smtp_ssl.call_count == 0
+    assert obj.notify('body', 'title') is True
+
+    assert mock_smtp.call_count == 1
+    assert mock_smtp_ssl.call_count == 0
+    assert response.starttls.call_count == 1
+    assert response.login.call_count == 1
+    assert response.sendmail.call_count == 1
+    # Store our Sent Arguments
+    # Syntax is:
+    #  sendmail(from_addr, to_addrs, msg, mail_options=(), rcpt_options=())
+    #             [0]        [1]     [2]
+    _from = response.sendmail.call_args[0][0]
+    _to = response.sendmail.call_args[0][1]
+    _msg = response.sendmail.call_args[0][2]
+    assert _from == 'name@spectrum.net'
+    assert isinstance(_to, list)
+    assert len(_to) == 1
+    assert _to[0] == 'john@yahoo.ca'
+    assert _msg.split('\n')[-3] == 'body'
+
+
+@mock.patch('smtplib.SMTP_SSL')
+@mock.patch('smtplib.SMTP')
+def test_plugin_email_by_ipaddr_1113(mock_smtp, mock_smtp_ssl):
+    """
+    NotifyEmail() GitHub Issue 1113
+    https://github.com/caronc/apprise/issues/1113
+    Email with ip addresses not working
+
+    """
+
+    response = mock.Mock()
+    mock_smtp_ssl.return_value = response
+    mock_smtp.return_value = response
+
+    results = email.NotifyEmail.parse_url(
+        'mailto://10.0.0.195:25/?to=alerts@example.com&'
+        'from=sender@example.com')
+
+    assert isinstance(results, dict)
+    assert results['user'] is None
+    assert results['password'] is None
+    assert results['host'] == '10.0.0.195'
+    assert results['from_addr'] == 'sender@example.com'
+    assert isinstance(results['targets'], list)
+    assert len(results['targets']) == 1
+    assert results['targets'][0] == 'alerts@example.com'
+    assert results['port'] == 25
+
+    _email = Apprise.instantiate(results, suppress_exceptions=False)
+    assert isinstance(_email, email.NotifyEmail) is True
+
+    assert len(_email.targets) == 1
+    assert (False, 'alerts@example.com') in _email.targets
+
+    assert _email.from_addr == (False, 'sender@example.com')
+    assert _email.user is None
+    assert _email.password is None
+    assert _email.smtp_host == '10.0.0.195'
+    assert _email.port == 25
+    assert _email.targets == [(False, 'alerts@example.com')]
+
+
+@pytest.mark.skipif('pgpy' not in sys.modules, reason="Requires PGPy")
+@mock.patch('smtplib.SMTP_SSL')
+@mock.patch('smtplib.SMTP')
+def test_plugin_email_pgp(mock_smtp, mock_smtpssl, tmpdir):
+    """
+    NotifyEmail() PGP Tests
+
+    """
+    # Our mock of our socket action
+    mock_socket = mock.Mock()
+    mock_socket.starttls.return_value = True
+    mock_socket.login.return_value = True
+
+    # Create a mock SMTP Object
+    mock_smtp.return_value = mock_socket
+    mock_smtpssl.return_value = mock_socket
+
+    assert utils.pgp.PGP_SUPPORT is True
+    utils.pgp.PGP_SUPPORT = False
+    # Forces to run through section of code that produces a warning there is
+    # no PGP
+    obj = Apprise.instantiate('mailto://user:pass@nuxref.com?pgp=yes')
+    # No PGP Support and set enabled
+    assert obj.notify('test body') is False
+
+    # Return the PGP status for remaining checks
+    utils.pgp.PGP_SUPPORT = True
+
+    # Initialize our email (no from name)
+    obj = Apprise.instantiate('mailto://user2:pass@nuxref.com?pgp=yes')
+
+    # Nothing to lookup
+    assert obj.pgp.public_keyfile() is None
+    assert obj.pgp.public_key() is None
+    assert obj.pgp.encrypt("message") is False
+    # Keys can not be generated in memory mode
+    assert obj.pgp.keygen() is False
+
+    # The reason... no location to store data
+    assert obj.store.mode == PersistentStoreMode.MEMORY
+
+    tmpdir0 = tmpdir.mkdir('tmp00')
+    asset = AppriseAsset(
+        storage_mode=PersistentStoreMode.FLUSH,
+        storage_path=str(tmpdir0),
+    )
+
+    # Prepare PGP
+    obj = Apprise.instantiate(
+        'mailto://pgp:pass@nuxref.com?pgp=yes', asset=asset)
+    assert obj.store.mode == PersistentStoreMode.FLUSH
+
+    # Still no public key
+    assert obj.pgp.public_key(autogen=False) is None
+    assert obj.pgp.keygen() is True
+    # Now we'll have a public key
+    assert isinstance(obj.pgp.public_keyfile(), str)
+
+    # Generate warning by second call
+    assert obj.pgp.keygen() is True
+
+    # Remove newly generated files
+    os.unlink(os.path.join(obj.store.path, 'pgp-pub.asc'))
+    os.unlink(os.path.join(obj.store.path, 'pgp-prv.asc'))
+    obj = Apprise.instantiate(
+        'mailto://pgp:pass@nuxref.com?pgp=yes', asset=asset)
+    assert obj.store.mode == PersistentStoreMode.FLUSH
+    assert obj.pgp.keygen() is True
+
+    # Prepare PGP while providing it a key
+    obj = Apprise.instantiate(
+        'mailto://pgp:pass@nuxref.com?pgp=yes&pgpkey=%s' %
+        obj.pgp.public_keyfile(), asset=asset)
+
+    # keyfile Defined
+    assert obj.pgp.pub_keyfile is not None
+
+    # Get our key
+    key = obj.pgp.public_key()
+
+    # In this circumstance we can not generate a new key as the one provided
+    # is immutable
+    assert obj.pgp.keygen() is False
+
+    # Our key is the same
+    assert key is obj.pgp.public_key()
+
+    tmpdir0 = tmpdir.mkdir('tmp00a')
+    asset0 = AppriseAsset(
+        storage_mode=PersistentStoreMode.FLUSH,
+        storage_path=str(tmpdir0),
+    )
+
+    # Prepare Invalid PGP Key
+    obj = Apprise.instantiate(
+        'mailto://pgpX:pass@nuxref.com?pgp=yes',
+        asset=asset0)
+
+    # No keyfiles
+    assert obj.pgp.pub_keyfile is None
+
+    # Generate our keys
+    assert obj.pgp.keygen() is True
+
+    # Second call uses cache
+    assert obj.pgp.keygen() is True
+
+    # We will find our key
+    key = obj.pgp.public_key()
+    assert key is not None
+
+    # Utilize force parameter
+    assert obj.pgp.keygen(force=True) is True
+
+    # Our key is new
+    assert key != obj.pgp.public_key()
+    assert obj.pgp.public_key() is not None
+
+    # Prepare Invalid PGP Key
+    obj = Apprise.instantiate(
+        'mailto://pgp:pass@nuxref.com?pgp=yes&pgpkey=invalid',
+        asset=asset)
+
+    # Returns false
+    assert obj.pgp.pub_keyfile is False
+    assert obj.pgp.public_keyfile() is False
+
+    tmpdir2 = tmpdir.mkdir('tmp02')
+    asset = AppriseAsset(
+        storage_mode=PersistentStoreMode.FLUSH,
+        storage_path=str(tmpdir2),
+    )
+    obj = Apprise.instantiate(
+        'mailto://chris:pass@nuxref.com?pgp=yes', asset=asset)
+
+    assert obj.store.mode == PersistentStoreMode.FLUSH
+    assert obj.pgp.keygen() is True
+
+    # Second call uses cache
+    assert obj.pgp.keygen() is True
+
+    # We will find our key
+    assert obj.pgp.public_key() is not None
+
+    # We do this again but even when we do a requisition for a public key
+    # it will generate a new pair or keys for us once it detects we don't
+    # have any
+    tmpdir3 = tmpdir.mkdir('tmp03')
+    asset = AppriseAsset(
+        storage_mode=PersistentStoreMode.FLUSH,
+        storage_path=str(tmpdir3),
+    )
+    obj = Apprise.instantiate(
+        'mailto://chris:pass@nuxref.com/user@example.com?pgp=yes', asset=asset)
+
+    assert obj.store.mode == PersistentStoreMode.FLUSH
+
+    # We'll have a public key object to encrypt with
+    assert obj.pgp.public_key() is not None
+
+    encrypted = obj.pgp.encrypt("hello world")
+    assert encrypted.startswith('-----BEGIN PGP MESSAGE-----')
+    assert encrypted.rstrip().endswith('-----END PGP MESSAGE-----')
+
+    dir_content = os.listdir(obj.store.path)
+    assert 'chris-pub.asc' in dir_content
+    assert 'chris-prv.asc' in dir_content
+
+    assert obj.pgp.public_keyfile().endswith('chris-pub.asc')
+
+    assert obj.notify('test body') is True
+
+    # The private key is not needed for sending the encrypted messages
+    os.unlink(os.path.join(obj.store.path, 'chris-prv.asc'))
+    os.rename(
+        os.path.join(obj.store.path, 'chris-pub.asc'),
+        os.path.join(obj.store.path, 'user@example.com-pub.asc'))
+
+    assert obj.pgp.public_keyfile() is None
+    assert obj.pgp.public_keyfile("not-reference@example.com") is None
+    assert obj.pgp.public_keyfile("user@example.com")\
+        .endswith('user@example.com-pub.asc')
+
+    assert obj.pgp.public_keyfile("user@example.com")\
+        .endswith('user@example.com-pub.asc')
+    assert obj.pgp.public_keyfile("User@Example.com")\
+        .endswith('user@example.com-pub.asc')
+    assert obj.pgp.public_keyfile("unknown") is None
+
+    shutil.copyfile(
+        os.path.join(obj.store.path, 'user@example.com-pub.asc'),
+        os.path.join(obj.store.path, 'user-pub.asc'),
+    )
+
+    assert obj.pgp.public_keyfile("user@example.com")\
+        .endswith('user@example.com-pub.asc')
+    assert obj.pgp.public_keyfile("User@Example.com")\
+        .endswith('user@example.com-pub.asc')
+
+    # Remove file
+    os.unlink(os.path.join(obj.store.path, 'user@example.com-pub.asc'))
+    assert obj.pgp.public_keyfile("user@example.com").endswith('user-pub.asc')
+    shutil.copyfile(
+        os.path.join(obj.store.path, 'user-pub.asc'),
+        os.path.join(obj.store.path, 'chris-pub.asc'),
+    )
+    # user-pub.asc still trumps still trumps
+    assert obj.pgp.public_keyfile("user@example.com").endswith('user-pub.asc')
+    shutil.copyfile(
+        os.path.join(obj.store.path, 'chris-pub.asc'),
+        os.path.join(obj.store.path, 'chris@nuxref.com-pub.asc'),
+    )
+    # user-pub still trumps
+    assert obj.pgp.public_keyfile("user@example.com").endswith('user-pub.asc')
+    assert obj.pgp.public_keyfile("invalid@example.com")\
+        .endswith('chris@nuxref.com-pub.asc')
+
+    # remove this file
+    os.unlink(os.path.join(obj.store.path, 'user-pub.asc'))
+
+    # now we fall back to basic/default configuration
+    assert obj.pgp.public_keyfile("user@example.com")\
+        .endswith('chris@nuxref.com-pub.asc')
+    os.unlink(os.path.join(obj.store.path, 'chris@nuxref.com-pub.asc'))
+    assert obj.pgp.public_keyfile("user@example.com").endswith('chris-pub.asc')
+
+    # Testing again
+    tmpdir4 = tmpdir.mkdir('tmp04')
+    asset = AppriseAsset(
+        storage_mode=PersistentStoreMode.FLUSH,
+        storage_path=str(tmpdir4),
+    )
+    obj = Apprise.instantiate(
+        'mailto://chris:pass@nuxref.com/user@example.com?pgp=yes', asset=asset)
+
+    with mock.patch('builtins.open', side_effect=FileNotFoundError):
+        # can't open key
+        assert obj.pgp.public_key() is None
+
+    with mock.patch('builtins.open', side_effect=OSError):
+        # can't open key
+        assert obj.pgp.public_key() is None
+        # Test unlink
+        with mock.patch('os.unlink', side_effect=OSError):
+            assert obj.pgp.public_key() is None
+
+        # Key Generation will fail
+        assert obj.pgp.keygen() is False
+
+    with mock.patch('pgpy.PGPKey.new', side_effect=NameError):
+        # Can't Generate keys
+        assert obj.pgp.keygen() is False
+        # can't open key
+        assert obj.pgp.public_key() is None
+
+    with mock.patch('pgpy.PGPKey.from_blob', side_effect=FileNotFoundError):
+        # can't open key
+        assert obj.pgp.public_key() is None
+
+    with mock.patch('pgpy.PGPKey.from_blob', side_effect=OSError):
+        # can't open key
+        assert obj.pgp.public_key() is None
+
+    # Can't encrypt key
+    with mock.patch('pgpy.PGPKey.from_blob', side_effect=NameError):
+        assert obj.pgp.public_key() is None
+
+    with mock.patch('pgpy.PGPMessage.new', side_effect=NameError):
+        assert obj.pgp.encrypt("message") is None
+        # Attempts to encrypt a message
+        assert obj.notify('test-encrypt') is False
+
+    # Create new keys
+    assert obj.pgp.keygen() is True
+    with mock.patch('os.path.isfile', return_value=False):
+        with mock.patch('builtins.open', side_effect=OSError):
+            with mock.patch('os.unlink', return_value=None):
+                assert obj.pgp.keygen() is False
+
+    # Testing again
+    tmpdir5 = tmpdir.mkdir('tmp05')
+    asset = AppriseAsset(
+        storage_mode=PersistentStoreMode.FLUSH,
+        storage_path=str(tmpdir5),
+    )
+    obj = Apprise.instantiate(
+        'mailto://chris:pass@nuxref.com/user@example.com?pgp=yes', asset=asset)
+
+    # Catch edge case where we just can't generate the the key
+    with mock.patch('os.path.isfile', side_effect=(
+            # 5x False to skip through pgp.public_keyfile()
+            False, False, False, False, False, False,
+            # 1x True to pass pgp.keygen()
+            True,
+            # 5x False to skip through pgp.public_keyfile() second call
+            False, False, False, False, False, False)):
+        with mock.patch('pgpy.PGPKey.from_blob',
+                        side_effect=FileNotFoundError):
+            assert obj.pgp.public_key() is None
+
+    # Corrupt Data
+    tmpdir6 = tmpdir.mkdir('tmp06')
+    asset = AppriseAsset(
+        storage_mode=PersistentStoreMode.FLUSH,
+        storage_path=str(tmpdir6),
+    )
+    obj = Apprise.instantiate(
+        'mailto://chris:pass@nuxref.com/user@example.com?pgp=yes', asset=asset)
+
+    shutil.copyfile(
+        os.path.join(TEST_VAR_DIR, 'pgp', 'corrupt-pub.asc'),
+        os.path.join(obj.store.path, 'chris-pub.asc'),
+    )
+
+    # Key is corrupted
+    obj.notify('test') is False
+
+    shutil.copyfile(
+        os.path.join(TEST_VAR_DIR, 'apprise-test.jpeg'),
+        os.path.join(obj.store.path, 'chris-pub.asc'),
+    )
+
+    # Key is a binary image; definitely not a valid key
+    obj.notify('test') is False
+
+    # Using a public key
+    shutil.copyfile(
+        os.path.join(TEST_VAR_DIR, 'pgp', 'valid-pub.asc'),
+        os.path.join(obj.store.path, 'chris-pub.asc'),
+    )
+
+    # Notification goes through
+    obj.notify('test') is True
+
+
+@pytest.mark.skipif('pgpy' not in sys.modules, reason="Requires PGPy")
+def test_plugin_email_prepare():
+    """
+    NotifyEmail() prepare_emails static function
+
+    """
+    with pytest.raises(AppriseException):
+        # No To: provided
+        for e in email.NotifyEmail.prepare_emails(
+                subject="Email Subject",
+                body="Email Body",
+                from_addr=(None, "test@test.com"), to=[]):
+            pass
+
+    # Most basic call (a lot of defaults are used)
+    _iterator = email.NotifyEmail.prepare_emails(
+        subject="Email Subject",
+        body="Email Body",
+        from_addr=(None, "test@test.com"),
+        to=[('Apprise User', 'apprise@test.com'), ])
+    entries = [i for i in _iterator]
+    assert len(entries) == 1
+
+
+@pytest.mark.skipif('pgpy' not in sys.modules, reason="Requires PGPy")
+def test_plugin_pgp(tmpdir):
+    """
+    Pretty Good Privacy Testing
+    """
+
+    p_obj = utils.pgp.ApprisePGPController(path=None)
+    # No Path
+    assert p_obj.keygen() is False
+    assert p_obj.public_keyfile() is None
+
+    p_obj = utils.pgp.ApprisePGPController(
+        path=None, email='l2g@email.com')
+    # No Path
+    assert p_obj.keygen() is False
+
+    tmpdir0 = tmpdir.mkdir('tmp00')
+    p_obj = utils.pgp.ApprisePGPController(
+        path=str(tmpdir0), email='l2g@email.com')
+
+    # A key can be generated with a path defined
+    assert p_obj.keygen() is True
+    assert p_obj.public_keyfile() is not None
+    # A key can be generated with a path defined
+    assert p_obj.keygen(name='Apprise', force=True) is True
+    assert p_obj.keygen(
+        email='l2g@email.com', name='Apprise', force=True) is True
+
+    assert utils.pgp.PGP_SUPPORT is True
+    utils.pgp.PGP_SUPPORT = False
+
+    with pytest.raises(AppriseException):
+        assert p_obj.public_keyfile()
+
+    # Return the PGP status for remaining checks
+    utils.pgp.PGP_SUPPORT = True
+
+    tmpdir1 = tmpdir.mkdir('tmp01')
+    p_obj = utils.pgp.ApprisePGPController(
+        path=str(tmpdir1), pub_keyfile='bad-file')
+    assert p_obj.public_keyfile() is False

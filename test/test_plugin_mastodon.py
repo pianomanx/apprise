@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# BSD 3-Clause License
+# BSD 2-Clause License
 #
 # Apprise - Push Notification Library.
-# Copyright (c) 2023, Chris Caron <lead2gold@gmail.com>
+# Copyright (c) 2025, Chris Caron <lead2gold@gmail.com>
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
@@ -13,10 +13,6 @@
 # 2. Redistributions in binary form must reproduce the above copyright notice,
 #    this list of conditions and the following disclaimer in the documentation
 #    and/or other materials provided with the distribution.
-#
-# 3. Neither the name of the copyright holder nor the names of its
-#    contributors may be used to endorse or promote products derived from
-#    this software without specific prior written permission.
 #
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 # AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
@@ -36,10 +32,11 @@ from unittest import mock
 import requests
 from json import dumps, loads
 from datetime import datetime
+from datetime import timezone
 from apprise import Apprise
 from apprise import NotifyType
 from apprise import AppriseAttachment
-from apprise.plugins.NotifyMastodon import NotifyMastodon
+from apprise.plugins.mastodon import NotifyMastodon
 from helpers import AppriseURLTester
 
 # Disable logging for a cleaner testing output
@@ -146,12 +143,6 @@ apprise_url_tests = (
         # is set and tests that we gracfully handle them
         'test_requests_exceptions': True,
     }),
-    ('mastodons://access_token@hostname', {
-        'instance': NotifyMastodon,
-        # Throws a series of connection and transfer exceptions when this flag
-        # is set and tests that we gracfully handle them
-        'test_requests_exceptions': True,
-    }),
 )
 
 
@@ -181,13 +172,14 @@ def test_plugin_mastodon_general(mock_post, mock_get):
     }
 
     # Epoch time:
-    epoch = datetime.utcfromtimestamp(0)
+    epoch = datetime.fromtimestamp(0, timezone.utc)
 
     request = mock.Mock()
     request.content = dumps(response_obj)
     request.status_code = requests.codes.ok
     request.headers = {
-        'X-RateLimit-Limit': (datetime.utcnow() - epoch).total_seconds(),
+        'X-RateLimit-Limit': (
+            datetime.now(timezone.utc) - epoch).total_seconds(),
         'X-RateLimit-Remaining': 1,
     }
 
@@ -198,8 +190,8 @@ def test_plugin_mastodon_general(mock_post, mock_get):
     # Instantiate our object
     obj = NotifyMastodon(token=token, host=host)
 
-    assert isinstance(obj, NotifyMastodon) is True
-    assert isinstance(obj.url(), str) is True
+    assert isinstance(obj, NotifyMastodon)
+    assert isinstance(obj.url(), str)
 
     # apprise room was found
     assert obj.send(body="test") is True
@@ -237,21 +229,21 @@ def test_plugin_mastodon_general(mock_post, mock_get):
 
     # Return our object, but place it in the future forcing us to block
     request.headers['X-RateLimit-Limit'] = \
-        (datetime.utcnow() - epoch).total_seconds() + 1
+        (datetime.now(timezone.utc) - epoch).total_seconds() + 1
     request.headers['X-RateLimit-Remaining'] = 0
     obj.ratelimit_remaining = 0
     assert obj.send(body="test") is True
 
     # Return our object, but place it in the future forcing us to block
     request.headers['X-RateLimit-Limit'] = \
-        (datetime.utcnow() - epoch).total_seconds() - 1
+        (datetime.now(timezone.utc) - epoch).total_seconds() - 1
     request.headers['X-RateLimit-Remaining'] = 0
     obj.ratelimit_remaining = 0
     assert obj.send(body="test") is True
 
     # Return our limits to always work
     request.headers['X-RateLimit-Limit'] = \
-        (datetime.utcnow() - epoch).total_seconds()
+        (datetime.now(timezone.utc) - epoch).total_seconds()
     request.headers['X-RateLimit-Remaining'] = 1
     obj.ratelimit_remaining = 1
 
@@ -276,7 +268,7 @@ def test_plugin_mastodon_general(mock_post, mock_get):
 
     results = NotifyMastodon.parse_url(
         'mastodon://{}@{}/@user?visbility=direct'.format(token, host))
-    assert isinstance(results, dict) is True
+    assert isinstance(results, dict)
     assert '@user' in results['targets']
 
     # cause a json parsing issue now

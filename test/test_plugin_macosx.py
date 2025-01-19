@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# BSD 3-Clause License
+# BSD 2-Clause License
 #
 # Apprise - Push Notification Library.
-# Copyright (c) 2023, Chris Caron <lead2gold@gmail.com>
+# Copyright (c) 2025, Chris Caron <lead2gold@gmail.com>
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
@@ -13,10 +13,6 @@
 # 2. Redistributions in binary form must reproduce the above copyright notice,
 #    this list of conditions and the following disclaimer in the documentation
 #    and/or other materials provided with the distribution.
-#
-# 3. Neither the name of the copyright holder nor the names of its
-#    contributors may be used to endorse or promote products derived from
-#    this software without specific prior written permission.
 #
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 # AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
@@ -38,7 +34,7 @@ from unittest.mock import Mock
 import pytest
 
 import apprise
-from apprise.plugins.NotifyMacOSX import NotifyMacOSX
+from apprise.plugins.macosx import NotifyMacOSX
 from helpers import reload_plugin
 
 
@@ -47,7 +43,7 @@ logging.disable(logging.CRITICAL)
 
 
 if sys.platform not in ["darwin", "linux"]:
-    pytest.skip("Only makes sense on macOS, but also works on Linux",
+    pytest.skip("Only makes sense on macOS, but testable in Linux",
                 allow_module_level=True)
 
 
@@ -60,8 +56,7 @@ def pretend_macos(mocker):
     mocker.patch("platform.mac_ver", return_value=('10.8', ('', '', ''), ''))
 
     # Reload plugin module, in order to re-run module-level code.
-    current_module = sys.modules[__name__]
-    reload_plugin("NotifyMacOSX", replace_in=current_module)
+    reload_plugin("macosx")
 
 
 @pytest.fixture
@@ -76,7 +71,7 @@ def terminal_notifier(mocker, tmp_path):
     os.chmod(notifier_program, 0o755)
 
     # Make the notifier use the temporary file instead of `terminal-notifier`.
-    mocker.patch("apprise.plugins.NotifyMacOSX.NotifyMacOSX.notify_paths",
+    mocker.patch("apprise.plugins.macosx.NotifyMacOSX.notify_paths",
                  (str(notifier_program),))
 
     yield notifier_program
@@ -97,12 +92,18 @@ def test_plugin_macosx_general_success(macos_notify_environment):
     NotifyMacOSX() general checks
     """
 
+    # Toggle Enable Flag
     obj = apprise.Apprise.instantiate(
         'macosx://_/?image=True', suppress_exceptions=False)
     assert isinstance(obj, NotifyMacOSX) is True
 
     # Test url() call
     assert isinstance(obj.url(), str) is True
+
+    # URL Identifier has been disabled as this isn't unique enough
+    # to be mapped to more the 1 end point; verify that None is always
+    # returned
+    assert obj.url_id() is None
 
     # test notifications
     assert obj.notify(title='title', body='body',
@@ -200,7 +201,7 @@ def test_plugin_macosx_pretend_linux(mocker, pretend_macos):
     # When patching something which has a side effect on the module-level code
     # of a plugin, make sure to reload it.
     mocker.patch("platform.system", return_value="Linux")
-    reload_plugin("NotifyMacOSX")
+    reload_plugin("macosx")
 
     # Our object is disabled.
     obj = apprise.Apprise.instantiate('macosx://', suppress_exceptions=False)
@@ -217,7 +218,7 @@ def test_plugin_macosx_pretend_old_macos(mocker, macos_version):
     # of a plugin, make sure to reload it.
     mocker.patch("platform.mac_ver",
                  return_value=(macos_version, ('', '', ''), ''))
-    reload_plugin("NotifyMacOSX")
+    reload_plugin("macosx")
 
     obj = apprise.Apprise.instantiate('macosx://', suppress_exceptions=False)
     assert obj is None

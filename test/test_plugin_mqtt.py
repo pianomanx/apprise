@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# BSD 3-Clause License
+# BSD 2-Clause License
 #
 # Apprise - Push Notification Library.
-# Copyright (c) 2023, Chris Caron <lead2gold@gmail.com>
+# Copyright (c) 2025, Chris Caron <lead2gold@gmail.com>
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
@@ -13,10 +13,6 @@
 # 2. Redistributions in binary form must reproduce the above copyright notice,
 #    this list of conditions and the following disclaimer in the documentation
 #    and/or other materials provided with the distribution.
-#
-# 3. Neither the name of the copyright holder nor the names of its
-#    contributors may be used to endorse or promote products derived from
-#    this software without specific prior written permission.
 #
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 # AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
@@ -39,7 +35,7 @@ from unittest.mock import call, Mock, ANY
 import pytest
 
 import apprise
-from apprise.plugins.NotifyMQTT import NotifyMQTT
+from apprise.plugins.mqtt import NotifyMQTT
 
 # Disable logging for a cleaner testing output
 logging.disable(logging.CRITICAL)
@@ -96,7 +92,12 @@ def test_plugin_mqtt_default_success(mqtt_client_mock):
     obj = apprise.Apprise.instantiate(
         'mqtt://localhost:1234/my/topic', suppress_exceptions=False)
     assert isinstance(obj, NotifyMQTT)
+    # We only loaded 1 topic
+    assert len(obj) == 1
     assert obj.url().startswith('mqtt://localhost:1234/my/topic')
+
+    # Genrate the URL Identifier
+    assert isinstance(obj.url_id(), str)
 
     # Verify default settings.
     assert re.search(r'qos=0', obj.url())
@@ -134,6 +135,9 @@ def test_plugin_mqtt_multiple_topics_success(mqtt_client_mock):
     obj = apprise.Apprise.instantiate(
         'mqtt://localhost/my/topic,my/other/topic',
         suppress_exceptions=False)
+
+    # Verify we have loaded 2 topics
+    assert len(obj) == 2
 
     assert isinstance(obj, NotifyMQTT)
     assert obj.url().startswith('mqtt://localhost')
@@ -252,7 +256,7 @@ def test_plugin_mqtt_tls_connect_success(mqtt_client_mock):
             tls_version=ssl.PROTOCOL_TLS,
             ciphers=None,
         ),
-        call.tls_insecure_set(True),
+        call.tls_insecure_set(False),
         call.connect('localhost', port=8883, keepalive=30),
         call.loop_start(),
         call.is_connected(),
@@ -299,7 +303,7 @@ def test_plugin_mqtt_tls_no_verify_success(mqtt_client_mock):
     # Verify the right calls have been made to the MQTT client object.
     # Let's only validate the single call of interest is present.
     # Everything else is identical with `test_plugin_mqtt_tls_connect_success`.
-    assert call.tls_insecure_set(False) in mqtt_client_mock.mock_calls
+    assert call.tls_insecure_set(True) in mqtt_client_mock.mock_calls
 
 
 def test_plugin_mqtt_session_client_id_success(mqtt_client_mock):
@@ -316,6 +320,24 @@ def test_plugin_mqtt_session_client_id_success(mqtt_client_mock):
     assert re.search(r'my/topic', obj.url())
     assert re.search(r'client_id=apprise', obj.url())
     assert re.search(r'session=yes', obj.url())
+    assert re.search(r'retain=no', obj.url())
+    assert obj.notify(body="test=test") is True
+
+
+def test_plugin_mqtt_retain(mqtt_client_mock):
+    """
+    Verify handling of Retain Message Flag
+    """
+
+    obj = apprise.Apprise.instantiate(
+        'mqtt://user@localhost/my/topic?retain=yes',
+        suppress_exceptions=False)
+
+    assert isinstance(obj, NotifyMQTT)
+    assert obj.url().startswith('mqtt://user@localhost')
+    assert re.search(r'my/topic', obj.url())
+    assert re.search(r'session=no', obj.url())
+    assert re.search(r'retain=yes', obj.url())
     assert obj.notify(body="test=test") is True
 
 

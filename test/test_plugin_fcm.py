@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# BSD 3-Clause License
+# BSD 2-Clause License
 #
 # Apprise - Push Notification Library.
-# Copyright (c) 2023, Chris Caron <lead2gold@gmail.com>
+# Copyright (c) 2025, Chris Caron <lead2gold@gmail.com>
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
@@ -13,10 +13,6 @@
 # 2. Redistributions in binary form must reproduce the above copyright notice,
 #    this list of conditions and the following disclaimer in the documentation
 #    and/or other materials provided with the distribution.
-#
-# 3. Neither the name of the copyright holder nor the names of its
-#    contributors may be used to endorse or promote products derived from
-#    this software without specific prior written permission.
 #
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 # AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
@@ -44,15 +40,15 @@ import pytest
 import requests
 import json
 from apprise import Apprise
-from apprise.plugins.NotifyFCM import NotifyFCM
+from apprise.plugins.fcm import NotifyFCM
 from helpers import AppriseURLTester
 
 try:
-    from apprise.plugins.NotifyFCM.oauth import GoogleOAuth
-    from apprise.plugins.NotifyFCM.common import FCM_MODES
-    from apprise.plugins.NotifyFCM.priority import (
+    from apprise.plugins.fcm.oauth import GoogleOAuth
+    from apprise.plugins.fcm.common import FCM_MODES
+    from apprise.plugins.fcm.priority import (
         FCMPriorityManager, FCM_PRIORITIES)
-    from apprise.plugins.NotifyFCM.color import FCMColorManager
+    from apprise.plugins.fcm.color import FCMColorManager
     from cryptography.exceptions import UnsupportedAlgorithm
 
 except ImportError:
@@ -877,13 +873,13 @@ def test_plugin_fcm_color_manager():
 
     # We will be `true` because we can acquire a color based on what was
     # passed in
-    assert bool(instance) is True
+    assert bool(instance)
 
     # Custom color
     instance = FCMColorManager('#A2B3A4')
     assert isinstance(instance.get(), str)
     assert instance.get() == '#a2b3a4'
-    assert bool(instance) is True
+    assert bool(instance)
     # str() response does not include hashtag
     assert str(instance) == 'a2b3a4'
 
@@ -892,7 +888,7 @@ def test_plugin_fcm_color_manager():
     assert isinstance(instance.get(), str)
     # Hashtag is always part of output
     assert instance.get() == '#a2b3a4'
-    assert bool(instance) is True
+    assert bool(instance)
     # str() response does not include hashtag
     assert str(instance) == 'a2b3a4'
 
@@ -901,7 +897,7 @@ def test_plugin_fcm_color_manager():
     assert isinstance(instance.get(), str)
     # Hashtag is always part of output
     assert instance.get() == '#aacc44'
-    assert bool(instance) is True
+    assert bool(instance)
     # str() response does not include hashtag
     assert str(instance) == 'aacc44'
 

@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# BSD 3-Clause License
+# BSD 2-Clause License
 #
 # Apprise - Push Notification Library.
-# Copyright (c) 2023, Chris Caron <lead2gold@gmail.com>
+# Copyright (c) 2025, Chris Caron <lead2gold@gmail.com>
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
@@ -13,10 +13,6 @@
 # 2. Redistributions in binary form must reproduce the above copyright notice,
 #    this list of conditions and the following disclaimer in the documentation
 #    and/or other materials provided with the distribution.
-#
-# 3. Neither the name of the copyright holder nor the names of its
-#    contributors may be used to endorse or promote products derived from
-#    this software without specific prior written permission.
 #
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 # AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
@@ -32,15 +28,22 @@
 
 from unittest import mock
 
+import os
 import pytest
 import requests
 
-from apprise.plugins.NotifySendGrid import NotifySendGrid
+from apprise import Apprise
+from apprise import NotifyType
+from apprise import AppriseAttachment
+from apprise.plugins.sendgrid import NotifySendGrid
 from helpers import AppriseURLTester
 
 # Disable logging for a cleaner testing output
 import logging
 logging.disable(logging.CRITICAL)
+
+# Attachment Directory
+TEST_VAR_DIR = os.path.join(os.path.dirname(__file__), 'var')
 
 # a test UUID we can use
 UUID4 = '8b799edf-6f98-4d3a-9be7-2862fb4e5752'
@@ -165,3 +168,42 @@ def test_plugin_sendgrid_edge_cases(mock_post, mock_get):
         from_email='l2g@example.com',
         bcc=('abc@def.com', '!invalid'),
         cc=('abc@test.org', '!invalid')), NotifySendGrid)
+
+
+@mock.patch('requests.get')
+@mock.patch('requests.post')
+def test_plugin_sendgrid_attachments(mock_post, mock_get):
+    """
+    NotifySendGrid() Attachments
+
+    """
+
+    request = mock.Mock()
+    request.status_code = requests.codes.ok
+
+    # Prepare Mock
+    mock_post.return_value = request
+    mock_get.return_value = request
+
+    path = os.path.join(TEST_VAR_DIR, 'apprise-test.gif')
+    attach = AppriseAttachment(path)
+    obj = Apprise.instantiate('sendgrid://abcd:user@example.com')
+    assert isinstance(obj, NotifySendGrid)
+    assert obj.notify(
+        body='body', title='title', notify_type=NotifyType.INFO,
+        attach=attach) is True
+
+    mock_post.reset_mock()
+    mock_get.reset_mock()
+
+    # Try again in a use case where we can't access the file
+    with mock.patch("os.path.isfile", return_value=False):
+        assert obj.notify(
+            body='body', title='title', notify_type=NotifyType.INFO,
+            attach=attach) is False
+
+    # Try again in a use case where we can't access the file
+    with mock.patch("builtins.open", side_effect=OSError):
+        assert obj.notify(
+            body='body', title='title', notify_type=NotifyType.INFO,
+            attach=attach) is False

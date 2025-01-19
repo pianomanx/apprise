@@ -38,7 +38,7 @@ jobs:
       # items within the `services` section of `docker-compose.yml`.
       matrix:
         target: [
-          "rpmbuild.el8",
+          "rpmbuild.el9",
         ]
 
     defaults:
@@ -49,7 +49,7 @@ jobs:
     steps:
 
     - name: Acquire sources
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Build package
       run: |

@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# BSD 3-Clause License
+# BSD 2-Clause License
 #
 # Apprise - Push Notification Library.
-# Copyright (c) 2023, Chris Caron <lead2gold@gmail.com>
+# Copyright (c) 2025, Chris Caron <lead2gold@gmail.com>
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
@@ -13,10 +13,6 @@
 # 2. Redistributions in binary form must reproduce the above copyright notice,
 #    this list of conditions and the following disclaimer in the documentation
 #    and/or other materials provided with the distribution.
-#
-# 3. Neither the name of the copyright holder nor the names of its
-#    contributors may be used to endorse or promote products derived from
-#    this software without specific prior written permission.
 #
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 # AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
@@ -35,7 +31,7 @@ from unittest import mock
 import requests
 from json import loads
 from apprise import Apprise
-from apprise.plugins.NotifyBulkSMS import NotifyBulkSMS
+from apprise.plugins.bulksms import NotifyBulkSMS
 from helpers import AppriseURLTester
 from apprise import NotifyType
 
@@ -166,12 +162,15 @@ def test_plugin_bulksms_edge_cases(mock_post):
     # Prepare Mock
     mock_post.return_value = response
 
-    # Test our markdown
+    # Instantiate our object
     obj = Apprise.instantiate(
         'bulksms://{}:{}@{}?batch=n'.format(user, pwd, '/'.join(targets)))
 
     assert obj.notify(
         body='body', title='title', notify_type=NotifyType.INFO) is True
+
+    # We know there are 4 targets
+    assert len(obj) == 4
 
     # Test our call count
     assert mock_post.call_count == 4
@@ -205,3 +204,9 @@ def test_plugin_bulksms_edge_cases(mock_post):
             ['+15551231234', '+15555555555', '@group', '@12'])))
 
     assert 'batch=no' in obj.url()
+
+    # With our batch in place, our calculations are different
+    obj = Apprise.instantiate(
+        'bulksms://{}:{}@{}?batch=y'.format(user, pwd, '/'.join(targets)))
+    # 2 groups and 2 phones are lumped together
+    assert len(obj) == 3

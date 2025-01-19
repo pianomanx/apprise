@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# BSD 3-Clause License
+# BSD 2-Clause License
 #
 # Apprise - Push Notification Library.
-# Copyright (c) 2023, Chris Caron <lead2gold@gmail.com>
+# Copyright (c) 2025, Chris Caron <lead2gold@gmail.com>
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
@@ -13,10 +13,6 @@
 # 2. Redistributions in binary form must reproduce the above copyright notice,
 #    this list of conditions and the following disclaimer in the documentation
 #    and/or other materials provided with the distribution.
-#
-# 3. Neither the name of the copyright holder nor the names of its
-#    contributors may be used to endorse or promote products derived from
-#    this software without specific prior written permission.
 #
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 # AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
@@ -32,20 +28,56 @@
 
 import sys
 import os
+import gc
 
 import pytest
+import mimetypes
 
-from apprise.common import NOTIFY_MODULE_MAP
+from apprise import NotificationManager
+from apprise import ConfigurationManager
+from apprise import AttachmentManager
 
 sys.path.append(os.path.join(os.path.dirname(__file__), 'helpers'))
 
+# Grant access to our Notification Manager Singleton
+N_MGR = NotificationManager()
+# Grant access to our Config Manager Singleton
+C_MGR = ConfigurationManager()
+# Grant access to our Attachment Manager Singleton
+A_MGR = AttachmentManager()
 
-@pytest.fixture(scope="session", autouse=True)
+
+@pytest.fixture(scope="function", autouse=True)
+def mimetypes_always_available():
+    """
+    A pytest session fixture which ensures mimetypes is set correctly
+    pointing to our temporary mime.types file
+    """
+    files = (os.path.join(os.path.dirname(__file__), 'var', 'mime.types'), )
+    mimetypes.init(files=files)
+
+
+@pytest.fixture(scope="function", autouse=True)
 def no_throttling_everywhere(session_mocker):
     """
     A pytest session fixture which disables throttling on all notifiers.
     It is automatically enabled.
     """
-    for notifier in NOTIFY_MODULE_MAP.values():
-        plugin = notifier["plugin"]
+    # Ensure we're working with a clean slate for each test
+    N_MGR.unload_modules()
+    C_MGR.unload_modules()
+    A_MGR.unload_modules()
+
+    for plugin in N_MGR.plugins():
         session_mocker.patch.object(plugin, "request_rate_per_sec", 0)
+
+
+@pytest.fixture(scope="function", autouse=True)
+def collect_all_garbage(session_mocker):
+    """
+    A pytest session fixture to ensure no __del__ cleanup call from
+    one plugin will cause testing issues with another.  Run garbage
+    collection after every test
+    """
+    # Force garbage collection
+    gc.collect()

@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# BSD 3-Clause License
+# BSD 2-Clause License
 #
 # Apprise - Push Notification Library.
-# Copyright (c) 2023, Chris Caron <lead2gold@gmail.com>
+# Copyright (c) 2025, Chris Caron <lead2gold@gmail.com>
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
@@ -13,10 +13,6 @@
 # 2. Redistributions in binary form must reproduce the above copyright notice,
 #    this list of conditions and the following disclaimer in the documentation
 #    and/or other materials provided with the distribution.
-#
-# 3. Neither the name of the copyright holder nor the names of its
-#    contributors may be used to endorse or promote products derived from
-#    this software without specific prior written permission.
 #
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 # AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
@@ -34,6 +30,7 @@ import json
 import logging
 import os
 from datetime import datetime
+from datetime import timezone
 from unittest.mock import Mock, patch
 
 import pytest
@@ -42,7 +39,7 @@ import requests
 from apprise import Apprise
 from apprise import NotifyType
 from apprise import AppriseAttachment
-from apprise.plugins.NotifyTwitter import NotifyTwitter
+from apprise.plugins.twitter import NotifyTwitter
 from helpers import AppriseURLTester
 
 # Disable logging for a cleaner testing output
@@ -86,7 +83,7 @@ apprise_url_tests = (
         'notify_response': False,
 
         # Our expected url(privacy=True) startswith() response:
-        'privacy_url': 'twitter://c...y/****/a...2/****',
+        'privacy_url': 'x://c...y/****/a...2/****',
     }),
     ('twitter://consumer_key/consumer_secret/atoken3/access_secret'
         '?cache=no', {
@@ -341,13 +338,14 @@ def test_plugin_twitter_general(mocker):
     }]
 
     # Epoch time:
-    epoch = datetime.utcfromtimestamp(0)
+    epoch = datetime.fromtimestamp(0, timezone.utc)
 
     request = Mock()
     request.content = json.dumps(response_obj)
     request.status_code = requests.codes.ok
     request.headers = {
-        'x-rate-limit-reset': (datetime.utcnow() - epoch).total_seconds(),
+        'x-rate-limit-reset': (
+            datetime.now(timezone.utc) - epoch).total_seconds(),
         'x-rate-limit-remaining': 1,
     }
 
@@ -402,21 +400,21 @@ def test_plugin_twitter_general(mocker):
 
     # Return our object, but place it in the future forcing us to block
     request.headers['x-rate-limit-reset'] = \
-        (datetime.utcnow() - epoch).total_seconds() + 1
+        (datetime.now(timezone.utc) - epoch).total_seconds() + 1
     request.headers['x-rate-limit-remaining'] = 0
     obj.ratelimit_remaining = 0
     assert obj.send(body="test") is True
 
     # Return our object, but place it in the future forcing us to block
     request.headers['x-rate-limit-reset'] = \
-        (datetime.utcnow() - epoch).total_seconds() - 1
+        (datetime.now(timezone.utc) - epoch).total_seconds() - 1
     request.headers['x-rate-limit-remaining'] = 0
     obj.ratelimit_remaining = 0
     assert obj.send(body="test") is True
 
     # Return our limits to always work
     request.headers['x-rate-limit-reset'] = \
-        (datetime.utcnow() - epoch).total_seconds()
+        (datetime.now(timezone.utc) - epoch).total_seconds()
     request.headers['x-rate-limit-remaining'] = 1
     obj.ratelimit_remaining = 1
 
@@ -595,10 +593,11 @@ def test_plugin_twitter_dm_attachments_basic(
     mock_post = mocker.patch("requests.post")
 
     # Epoch time:
-    epoch = datetime.utcfromtimestamp(0)
+    epoch = datetime.fromtimestamp(0, timezone.utc)
     mock_get.return_value = good_message_response
     mock_post.return_value.headers = {
-        'x-rate-limit-reset': (datetime.utcnow() - epoch).total_seconds(),
+        'x-rate-limit-reset': (
+            datetime.now(timezone.utc) - epoch).total_seconds(),
         'x-rate-limit-remaining': 1,
     }
 

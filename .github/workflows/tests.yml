@@ -31,7 +31,7 @@ jobs:
       # expanded using subsequent `include` items.
       matrix:
         os: ["ubuntu-latest"]
-        python-version: ["3.10"]
+        python-version: ["3.11"]
         bare: [false]
 
         include:
@@ -39,22 +39,16 @@ jobs:
           # Within the `bare` environment, `all-plugin-requirements.txt` will NOT be
           # installed, to verify the application also works without those dependencies.
           - os: "ubuntu-latest"
-            python-version: "3.10"
+            python-version: "3.11"
             bare: true
 
           # Let's save resources and only build a single slot on macOS- and Windows.
           - os: "macos-latest"
-            python-version: "3.10"
+            python-version: "3.11"
           - os: "windows-latest"
-            python-version: "3.10"
+            python-version: "3.11"
 
           # Test more available versions of CPython on Linux.
-          - os: "ubuntu-20.04"
-            # v3.6 (exclusively referenced) is not supported by GitHub anymore)
-            # v3.6.8 is fixed since it is the version CentOS/Rocky/RedHat v8 uses
-            python-version: "3.6.8"
-          - os: "ubuntu-latest"
-            python-version: "3.7"
           - os: "ubuntu-latest"
             python-version: "3.8"
           - os: "ubuntu-latest"
@@ -63,16 +57,8 @@ jobs:
             python-version: "3.10"
           - os: "ubuntu-latest"
             python-version: "3.11"
-
-          # Test more available versions of PyPy on Linux.
           - os: "ubuntu-latest"
-            python-version: "pypy3.6"
-          - os: "ubuntu-latest"
-            python-version: "pypy3.7"
-          - os: "ubuntu-latest"
-            python-version: "pypy3.8"
-          - os: "ubuntu-latest"
-            python-version: "pypy3.9"
+            python-version: "3.12"
 
     defaults:
       run:
@@ -87,7 +73,7 @@ jobs:
     steps:
 
     - name: Acquire sources
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Install prerequisites (Linux)
       if: runner.os == 'Linux'
@@ -96,7 +82,7 @@ jobs:
         sudo apt-get install libdbus-1-dev
 
     - name: Setup Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
         architecture: x64
@@ -110,27 +96,25 @@ jobs:
 
     - name: Install project dependencies (Baseline)
       run: |
-        pip install wheel
-        pip install -r requirements.txt -r dev-requirements.txt
+        pip install --use-pep517 wheel
+        pip install --use-pep517 -r requirements.txt -r dev-requirements.txt
 
     - name: Install project dependencies (All plugins)
       if: matrix.bare != true
       run: |
-        pip install -r all-plugin-requirements.txt
+        pip install --use-pep517 -r all-plugin-requirements.txt
         
-        # Installing `dbus-python` will only work on Linux/CPython.
-        [[ $RUNNER_OS = "Linux" && $PYTHON != 'pypy'* ]] && pip install dbus-python || true
-
     - name: Install project dependencies (Windows)
       if: runner.os == 'Windows'
       run: |
-        [[ $PYTHON != 'pypy'* ]] && pip install -r win-requirements.txt || true
+        pip install --use-pep517 -r win-requirements.txt || true
 
     # Install package in editable mode,
     # and run project-specific tasks.
     - name: Setup project
       run: |
-        pip install --editable=.
+        python -m pip install --upgrade pip setuptools wheel
+        pip install --use-pep517 --editable=.
         python setup.py compile_catalog
 
     # For saving resources, code style checking is
@@ -151,7 +135,7 @@ jobs:
         coverage report
 
     - name: Upload coverage data
-      uses: codecov/codecov-action@v3
+      uses: codecov/codecov-action@v4
       with:
         files: ./coverage.xml
         fail_ci_if_error: false

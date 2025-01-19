@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# BSD 3-Clause License
+# BSD 2-Clause License
 #
 # Apprise - Push Notification Library.
-# Copyright (c) 2023, Chris Caron <lead2gold@gmail.com>
+# Copyright (c) 2025, Chris Caron <lead2gold@gmail.com>
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
@@ -13,10 +13,6 @@
 # 2. Redistributions in binary form must reproduce the above copyright notice,
 #    this list of conditions and the following disclaimer in the documentation
 #    and/or other materials provided with the distribution.
-#
-# 3. Neither the name of the copyright holder nor the names of its
-#    contributors may be used to endorse or promote products derived from
-#    this software without specific prior written permission.
 #
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 # AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
@@ -30,7 +26,7 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-from apprise.plugins.NotifyBark import NotifyBark
+from apprise.plugins.bark import NotifyBark
 from helpers import AppriseURLTester
 
 # Disable logging for a cleaner testing output
@@ -119,6 +115,30 @@ apprise_url_tests = (
     }),
     ('bark://192.168.0.6:8081/device_key/?level=active', {
         # active level
+        'instance': NotifyBark,
+    }),
+    ('bark://192.168.0.6:8081/device_key/?level=critical', {
+        # critical level
+        'instance': NotifyBark,
+    }),
+    ('bark://192.168.0.6:8081/device_key/?level=critical&volume=10', {
+        # critical level with volume 10
+        'instance': NotifyBark,
+    }),
+    ('bark://192.168.0.6:8081/device_key/?level=critical&volume=invalid', {
+        # critical level with invalid volume
+        'instance': NotifyBark,
+    }),
+    ('bark://192.168.0.6:8081/device_key/?level=critical&volume=11', {
+        # volume > 10
+        'instance': NotifyBark,
+    }),
+    ('bark://192.168.0.6:8081/device_key/?level=critical&volume=-1', {
+        # volume < 0
+        'instance': NotifyBark,
+    }),
+    ('bark://192.168.0.6:8081/device_key/?level=critical&volume=', {
+        # volume None
         'instance': NotifyBark,
     }),
     ('bark://user:pass@192.168.0.5:8086/device_key/device_key2/', {

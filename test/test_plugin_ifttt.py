@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# BSD 3-Clause License
+# BSD 2-Clause License
 #
 # Apprise - Push Notification Library.
-# Copyright (c) 2023, Chris Caron <lead2gold@gmail.com>
+# Copyright (c) 2025, Chris Caron <lead2gold@gmail.com>
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
@@ -13,10 +13,6 @@
 # 2. Redistributions in binary form must reproduce the above copyright notice,
 #    this list of conditions and the following disclaimer in the documentation
 #    and/or other materials provided with the distribution.
-#
-# 3. Neither the name of the copyright holder nor the names of its
-#    contributors may be used to endorse or promote products derived from
-#    this software without specific prior written permission.
 #
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 # AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
@@ -35,7 +31,7 @@ from unittest import mock
 
 import requests
 from apprise import NotifyType
-from apprise.plugins.NotifyIFTTT import NotifyIFTTT
+from apprise.plugins.ifttt import NotifyIFTTT
 from helpers import AppriseURLTester
 
 # Disable logging for a cleaner testing output
@@ -154,7 +150,7 @@ def test_plugin_ifttt_edge_cases(mock_post, mock_get):
         NotifyIFTTT(webhook_id=webhook_id, events=None)
 
     obj = NotifyIFTTT(webhook_id=webhook_id, events=events)
-    assert isinstance(obj, NotifyIFTTT) is True
+    assert isinstance(obj, NotifyIFTTT)
 
     assert obj.notify(
         body='body', title='title', notify_type=NotifyType.INFO) is True
@@ -164,7 +160,7 @@ def test_plugin_ifttt_edge_cases(mock_post, mock_get):
         webhook_id=webhook_id, events=events,
         add_tokens={'Test': 'ValueA', 'Test2': 'ValueB'})
 
-    assert isinstance(obj, NotifyIFTTT) is True
+    assert isinstance(obj, NotifyIFTTT)
 
     assert obj.notify(
         body='body', title='title', notify_type=NotifyType.INFO) is True
@@ -175,7 +171,7 @@ def test_plugin_ifttt_edge_cases(mock_post, mock_get):
             webhook_id=webhook_id, events=events,
             del_tokens=NotifyIFTTT.ifttt_default_title_key)
 
-    assert isinstance(obj, NotifyIFTTT) is True
+    assert isinstance(obj, NotifyIFTTT)
 
     assert obj.notify(
         body='body', title='title', notify_type=NotifyType.INFO) is True
@@ -191,7 +187,7 @@ def test_plugin_ifttt_edge_cases(mock_post, mock_get):
             NotifyIFTTT.ifttt_default_body_key,
             NotifyIFTTT.ifttt_default_type_key))
 
-    assert isinstance(obj, NotifyIFTTT) is True
+    assert isinstance(obj, NotifyIFTTT)
 
     assert obj.notify(
         body='body', title='title', notify_type=NotifyType.INFO) is True
@@ -207,4 +203,4 @@ def test_plugin_ifttt_edge_cases(mock_post, mock_get):
             NotifyIFTTT.ifttt_default_body_key: None,
             NotifyIFTTT.ifttt_default_type_key: None})
 
-    assert isinstance(obj, NotifyIFTTT) is True
+    assert isinstance(obj, NotifyIFTTT)

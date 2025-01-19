@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# BSD 3-Clause License
+# BSD 2-Clause License
 #
 # Apprise - Push Notification Library.
-# Copyright (c) 2023, Chris Caron <lead2gold@gmail.com>
+# Copyright (c) 2025, Chris Caron <lead2gold@gmail.com>
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
@@ -13,10 +13,6 @@
 # 2. Redistributions in binary form must reproduce the above copyright notice,
 #    this list of conditions and the following disclaimer in the documentation
 #    and/or other materials provided with the distribution.
-#
-# 3. Neither the name of the copyright holder nor the names of its
-#    contributors may be used to endorse or promote products derived from
-#    this software without specific prior written permission.
 #
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 # AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
@@ -35,7 +31,7 @@ from unittest import mock
 
 import requests
 
-from apprise.plugins.NotifyForm import NotifyForm
+from apprise.plugins.custom_form import NotifyForm
 from helpers import AppriseURLTester
 from apprise import Apprise
 from apprise import NotifyType
@@ -89,6 +85,9 @@ apprise_url_tests = (
         'instance': NotifyForm,
     }),
     ('form://user@localhost?method=delete', {
+        'instance': NotifyForm,
+    }),
+    ('form://user@localhost?method=patch', {
         'instance': NotifyForm,
     }),
 
@@ -230,6 +229,73 @@ def test_plugin_custom_form_attachments(mock_post):
         body='body', title='title', notify_type=NotifyType.INFO,
         attach=attach) is False
 
+    #
+    # Test attach-as
+    #
+
+    # Assign our mock object our return value
+    mock_post.return_value = okay_response
+    mock_post.side_effect = None
+
+    obj = Apprise.instantiate(
+        'form://user@localhost.localdomain/?attach-as=file')
+    assert isinstance(obj, NotifyForm)
+
+    # Test Single Valid Attachment
+    path = os.path.join(TEST_VAR_DIR, 'apprise-test.gif')
+    attach = AppriseAttachment(path)
+    assert obj.notify(
+        body='body', title='title', notify_type=NotifyType.INFO,
+        attach=attach) is True
+
+    # Test Valid Attachment (load 3) (produces a warning)
+    path = (
+        os.path.join(TEST_VAR_DIR, 'apprise-test.gif'),
+        os.path.join(TEST_VAR_DIR, 'apprise-test.gif'),
+        os.path.join(TEST_VAR_DIR, 'apprise-test.gif'),
+    )
+    attach = AppriseAttachment(path)
+    assert obj.notify(
+        body='body', title='title', notify_type=NotifyType.INFO,
+        attach=attach) is True
+
+    # Test our other variations of accepted values
+    # we support *, :, ?, ., +, %, and $
+    for attach_as in (
+            'file*', '*file', 'file*file',
+            'file:', ':file', 'file:file',
+            'file?', '?file', 'file?file',
+            'file.', '.file', 'file.file',
+            'file+', '+file', 'file+file',
+            'file$', '$file', 'file$file'):
+
+        obj = Apprise.instantiate(
+            f'form://user@localhost.localdomain/?attach-as={attach_as}')
+        assert isinstance(obj, NotifyForm)
+
+        # Test Single Valid Attachment
+        path = os.path.join(TEST_VAR_DIR, 'apprise-test.gif')
+        attach = AppriseAttachment(path)
+        assert obj.notify(
+            body='body', title='title', notify_type=NotifyType.INFO,
+            attach=attach) is True
+
+        # Test Valid Attachment (load 3) (produces a warning)
+        path = (
+            os.path.join(TEST_VAR_DIR, 'apprise-test.gif'),
+            os.path.join(TEST_VAR_DIR, 'apprise-test.gif'),
+            os.path.join(TEST_VAR_DIR, 'apprise-test.gif'),
+        )
+        attach = AppriseAttachment(path)
+        assert obj.notify(
+            body='body', title='title', notify_type=NotifyType.INFO,
+            attach=attach) is True
+
+    # Test invalid attach-as input
+    obj = Apprise.instantiate(
+        'form://user@localhost.localdomain/?attach-as={')
+    assert obj is None
+
 
 @mock.patch('requests.post')
 @mock.patch('requests.get')
@@ -248,7 +314,7 @@ def test_plugin_custom_form_edge_cases(mock_get, mock_post):
     mock_get.return_value = response
 
     results = NotifyForm.parse_url(
-        'form://localhost:8080/command?:abcd=test&method=POST')
+        'form://localhost:8080/command?:message=msg&:abcd=test&method=POST')
 
     assert isinstance(results, dict)
     assert results['user'] is None
@@ -262,6 +328,7 @@ def test_plugin_custom_form_edge_cases(mock_get, mock_post):
     assert results['url'] == 'form://localhost:8080/command'
     assert isinstance(results['qsd:'], dict) is True
     assert results['qsd:']['abcd'] == 'test'
+    assert results['qsd:']['message'] == 'msg'
 
     instance = NotifyForm(**results)
     assert isinstance(instance, NotifyForm)
@@ -277,8 +344,11 @@ def test_plugin_custom_form_edge_cases(mock_get, mock_post):
     assert details[1]['data']['abcd'] == 'test'
     assert 'title' in details[1]['data']
     assert details[1]['data']['title'] == 'title'
-    assert 'message' in details[1]['data']
-    assert details[1]['data']['message'] == 'body'
+    assert 'message' not in details[1]['data']
+    # message over-ride was provided; the body is now in `msg` and not
+    # `message`
+    assert 'msg' in details[1]['data']
+    assert details[1]['data']['msg'] == 'body'
 
     assert instance.url(privacy=False).startswith(
         'form://localhost:8080/command?')
@@ -294,7 +364,7 @@ def test_plugin_custom_form_edge_cases(mock_get, mock_post):
     mock_get.reset_mock()
 
     results = NotifyForm.parse_url(
-        'form://localhost:8080/command?:message=test&method=POST')
+        'form://localhost:8080/command?:type=&:message=msg&method=POST')
 
     assert isinstance(results, dict)
     assert results['user'] is None
@@ -307,7 +377,7 @@ def test_plugin_custom_form_edge_cases(mock_get, mock_post):
     assert results['schema'] == 'form'
     assert results['url'] == 'form://localhost:8080/command'
     assert isinstance(results['qsd:'], dict) is True
-    assert results['qsd:']['message'] == 'test'
+    assert results['qsd:']['message'] == 'msg'
 
     instance = NotifyForm(**results)
     assert isinstance(instance, NotifyForm)
@@ -321,9 +391,18 @@ def test_plugin_custom_form_edge_cases(mock_get, mock_post):
     assert details[0][0] == 'http://localhost:8080/command'
     assert 'title' in details[1]['data']
     assert details[1]['data']['title'] == 'title'
+
+    # type was removed from response object
+    assert 'type' not in details[1]['data']
+
+    # message over-ride was provided; the body is now in `msg` and not
+    # `message`
+    assert details[1]['data']['msg'] == 'body'
+
     # 'body' is over-ridden by 'test' passed inline with the URL
-    assert 'message' in details[1]['data']
-    assert details[1]['data']['message'] == 'test'
+    assert 'message' not in details[1]['data']
+    assert 'msg' in details[1]['data']
+    assert details[1]['data']['msg'] == 'body'
 
     assert instance.url(privacy=False).startswith(
         'form://localhost:8080/command?')
@@ -368,8 +447,9 @@ def test_plugin_custom_form_edge_cases(mock_get, mock_post):
     assert 'title' in details[1]['params']
     assert details[1]['params']['title'] == 'title'
     # 'body' is over-ridden by 'test' passed inline with the URL
-    assert 'message' in details[1]['params']
-    assert details[1]['params']['message'] == 'test'
+    assert 'message' not in details[1]['params']
+    assert 'test' in details[1]['params']
+    assert details[1]['params']['test'] == 'body'
 
     assert instance.url(privacy=False).startswith(
         'form://localhost:8080/command?')

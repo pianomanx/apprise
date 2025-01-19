@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# BSD 3-Clause License
+# BSD 2-Clause License
 #
 # Apprise - Push Notification Library.
-# Copyright (c) 2023, Chris Caron <lead2gold@gmail.com>
+# Copyright (c) 2025, Chris Caron <lead2gold@gmail.com>
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
@@ -13,10 +13,6 @@
 # 2. Redistributions in binary form must reproduce the above copyright notice,
 #    this list of conditions and the following disclaimer in the documentation
 #    and/or other materials provided with the distribution.
-#
-# 3. Neither the name of the copyright holder nor the names of its
-#    contributors may be used to endorse or promote products derived from
-#    this software without specific prior written permission.
 #
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 # AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
@@ -31,10 +27,10 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 __title__ = 'Apprise'
-__version__ = '1.2.1'
+__version__ = '1.9.2'
 __author__ = 'Chris Caron'
-__license__ = 'GPLv2'
-__copywrite__ = 'Copyright (C) 2023 Chris Caron <lead2gold@gmail.com>'
+__license__ = 'BSD 2-Clause'
+__copywrite__ = 'Copyright (C) 2025 Chris Caron <lead2gold@gmail.com>'
 __email__ = 'lead2gold@gmail.com'
 __status__ = 'Production'
 
@@ -52,18 +48,25 @@ from .common import ContentIncludeMode
 from .common import CONTENT_INCLUDE_MODES
 from .common import ContentLocation
 from .common import CONTENT_LOCATIONS
+from .common import PersistentStoreMode
+from .common import PERSISTENT_STORE_MODES
 
-from .URLBase import URLBase
-from .URLBase import PrivacyMode
-from .plugins.NotifyBase import NotifyBase
-from .config.ConfigBase import ConfigBase
-from .attachment.AttachBase import AttachBase
+from .url import URLBase
+from .url import PrivacyMode
+from .plugins.base import NotifyBase
+from .config.base import ConfigBase
+from .attachment.base import AttachBase
+from . import exception
 
-from .Apprise import Apprise
-from .AppriseAsset import AppriseAsset
-from .AppriseConfig import AppriseConfig
-from .AppriseAttachment import AppriseAttachment
-
+from .apprise import Apprise
+from .locale import AppriseLocale
+from .asset import AppriseAsset
+from .persistent_store import PersistentStore
+from .apprise_config import AppriseConfig
+from .apprise_attachment import AppriseAttachment
+from .manager_attachment import AttachmentManager
+from .manager_config import ConfigurationManager
+from .manager_plugins import NotificationManager
 from . import decorators
 
 # Inherit our logging with our additional entries added to it
@@ -77,7 +80,11 @@ logging.getLogger(__name__).addHandler(logging.NullHandler())
 __all__ = [
     # Core
     'Apprise', 'AppriseAsset', 'AppriseConfig', 'AppriseAttachment', 'URLBase',
-    'NotifyBase', 'ConfigBase', 'AttachBase',
+    'NotifyBase', 'ConfigBase', 'AttachBase', 'AppriseLocale',
+    'PersistentStore',
+
+    # Exceptions
+    'exception',
 
     # Reference
     'NotifyType', 'NotifyImageSize', 'NotifyFormat', 'OverflowMode',
@@ -85,7 +92,11 @@ __all__ = [
     'ConfigFormat', 'CONFIG_FORMATS',
     'ContentIncludeMode', 'CONTENT_INCLUDE_MODES',
     'ContentLocation', 'CONTENT_LOCATIONS',
+    'PersistentStoreMode', 'PERSISTENT_STORE_MODES',
     'PrivacyMode',
+
+    # Managers
+    'NotificationManager', 'ConfigurationManager', 'AttachmentManager',
 
     # Decorator
     'decorators',

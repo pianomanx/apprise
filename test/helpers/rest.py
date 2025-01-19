@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# BSD 3-Clause License
+# BSD 2-Clause License
 #
 # Apprise - Push Notification Library.
-# Copyright (c) 2023, Chris Caron <lead2gold@gmail.com>
+# Copyright (c) 2025, Chris Caron <lead2gold@gmail.com>
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
@@ -13,10 +13,6 @@
 # 2. Redistributions in binary form must reproduce the above copyright notice,
 #    this list of conditions and the following disclaimer in the documentation
 #    and/or other materials provided with the distribution.
-#
-# 3. Neither the name of the copyright holder nor the names of its
-#    contributors may be used to endorse or promote products derived from
-#    this software without specific prior written permission.
 #
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 # AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
@@ -41,6 +37,7 @@ from string import ascii_uppercase as str_alpha
 from string import digits as str_num
 
 from apprise import NotifyBase
+from apprise import PersistentStoreMode
 from apprise import NotifyType
 from apprise import Apprise
 from apprise import AppriseAsset
@@ -109,17 +106,18 @@ class AppriseURLTester:
             'meta': meta,
         })
 
-    def run_all(self):
+    def run_all(self, tmpdir=None):
         """
         Run all of our tests
         """
         # iterate over our dictionary and test it out
         for (url, meta) in self.__tests:
-            self.run(url, meta)
+            self.run(url, meta, tmpdir)
 
     @mock.patch('requests.get')
     @mock.patch('requests.post')
-    def run(self, url, meta, mock_post, mock_get):
+    @mock.patch('requests.request')
+    def run(self, url, meta, tmpdir, mock_request, mock_post, mock_get):
         """
         Run a specific test
         """
@@ -137,16 +135,38 @@ class AppriseURLTester:
         # Our regular expression
         url_matches = meta.get('url_matches')
 
+        # Detect our storage path (used to set persistent storage
+        # mode
+        storage_path = \
+            tmpdir if tmpdir and isinstance(tmpdir, str) and \
+            os.path.isdir(tmpdir) else None
+
+        # Our storage mode to set
+        storage_mode = meta.get(
+            'storage_mode',
+            PersistentStoreMode.MEMORY
+            if not storage_path else PersistentStoreMode.AUTO)
+
+        # Debug Mode
+        pdb = meta.get('pdb', False)
+
         # Whether or not we should include an image with our request; unless
         # otherwise specified, we assume that images are to be included
         include_image = meta.get('include_image', True)
         if include_image:
             # a default asset
-            asset = AppriseAsset()
+            asset = AppriseAsset(
+                storage_mode=storage_mode,
+                storage_path=storage_path,
+            )
 
         else:
             # Disable images
-            asset = AppriseAsset(image_path_mask=False, image_url_mask=False)
+            asset = AppriseAsset(
+                image_path_mask=False, image_url_mask=False,
+                storage_mode=storage_mode,
+                storage_path=storage_path,
+            )
             asset.image_url_logo = None
 
         # Mock our request object
@@ -154,6 +174,13 @@ class AppriseURLTester:
         robj.content = u''
         mock_get.return_value = robj
         mock_post.return_value = robj
+        mock_request.return_value = robj
+
+        if pdb:
+            # Makes it easier to debug with this peice of code
+            # just add `pdb': True to the call that is failing
+            import pdb
+            pdb.set_trace()
 
         try:
             # We can now instantiate our object:
@@ -187,12 +214,12 @@ class AppriseURLTester:
         if instance is None:
             # Expected None but didn't get it
             print('%s instantiated %s (but expected None)' % (
-                url, str(obj)))
+                url, type(obj)))
             assert False
 
         if not isinstance(obj, instance):
             print('%s instantiated %s (but expected %s)' % (
-                url, type(instance), str(obj)))
+                url, type(obj), instance))
             assert False
 
         if isinstance(obj, NotifyBase):
@@ -202,6 +229,16 @@ class AppriseURLTester:
             # We loaded okay; now lets make sure we can reverse
             # this url
             assert isinstance(obj.url(), str) is True
+
+            # Test that we support a url identifier
+            url_id = obj.url_id()
+
+            # It can be either disabled or a string; nothing else
+            assert isinstance(url_id, str) or \
+                (url_id is None and obj.url_identifier is False)
+
+            # Verify we can acquire a target count as an integer
+            assert isinstance(len(obj), int)
 
             # Test url() with privacy=True
             assert isinstance(
@@ -229,6 +266,20 @@ class AppriseURLTester:
             # from the one that was already created properly
             obj_cmp = Apprise.instantiate(obj.url())
 
+            # Our new object should produce the same url identifier
+            if obj.url_identifier != obj_cmp.url_identifier:
+                print('Provided %s' % url)
+                raise AssertionError(
+                    "URL Identifier: '{}' != expected '{}'".format(
+                        obj_cmp.url_identifier, obj.url_identifier))
+
+            # Back our check up
+            if obj.url_id() != obj_cmp.url_id():
+                print('Provided %s' % url)
+                raise AssertionError(
+                    "URL ID(): '{}' != expected '{}'".format(
+                        obj_cmp.url_id(), obj.url_id()))
+
             # Our object should be the same instance as what we had
             # originally expected above.
             if not isinstance(obj_cmp, NotifyBase):
@@ -240,8 +291,17 @@ class AppriseURLTester:
                     url, obj.url()))
                 assert False
 
+            # Verify there is no change from the old and the new
+            if len(obj) != len(obj_cmp):
+                print('%d targets found in %s' % (
+                    len(obj), obj.url(privacy=True)))
+                print('But %d targets found in %s' % (
+                    len(obj_cmp), obj_cmp.url(privacy=True)))
+                raise AssertionError("Target miscount %d != %d")
+
             # Tidy our object
             del obj_cmp
+            del instance
 
         if _self:
             # Iterate over our expected entries inside of our
@@ -268,8 +328,22 @@ class AppriseURLTester:
     @mock.patch('requests.head')
     @mock.patch('requests.put')
     @mock.patch('requests.delete')
-    def __notify(self, url, obj, meta, asset, mock_del, mock_put, mock_head,
-                 mock_post, mock_get):
+    @mock.patch('requests.patch')
+    @mock.patch('requests.request')
+    def __notify(
+        self,
+        url,
+        obj,
+        meta,
+        asset,
+        mock_request,
+        mock_patch,
+        mock_del,
+        mock_put,
+        mock_head,
+        mock_post,
+        mock_get
+    ):
         """
         Perform notification testing against object specified
         """
@@ -320,14 +394,21 @@ class AppriseURLTester:
             requests_response_text = dumps(requests_response_text)
             requests_response_content = requests_response_text.encode('utf-8')
 
+        else:
+            requests_response_content = u''
+            requests_response_text = ''
+
         # A request
         robj = mock.Mock()
         robj.content = u''
+        robj.text = ''
         mock_get.return_value = robj
         mock_post.return_value = robj
         mock_head.return_value = robj
+        mock_patch.return_value = robj
         mock_del.return_value = robj
         mock_put.return_value = robj
+        mock_request.return_value = robj
 
         if test_requests_exceptions is False:
             # Handle our default response
@@ -336,6 +417,8 @@ class AppriseURLTester:
             mock_del.return_value.status_code = requests_response_code
             mock_post.return_value.status_code = requests_response_code
             mock_get.return_value.status_code = requests_response_code
+            mock_patch.return_value.status_code = requests_response_code
+            mock_request.return_value.status_code = requests_response_code
 
             # Handle our default text response
             mock_get.return_value.content = requests_response_content
@@ -343,12 +426,16 @@ class AppriseURLTester:
             mock_del.return_value.content = requests_response_content
             mock_put.return_value.content = requests_response_content
             mock_head.return_value.content = requests_response_content
+            mock_patch.return_value.content = requests_response_content
+            mock_request.return_value.content = requests_response_content
 
             mock_get.return_value.text = requests_response_text
             mock_post.return_value.text = requests_response_text
             mock_put.return_value.text = requests_response_text
             mock_del.return_value.text = requests_response_text
             mock_head.return_value.text = requests_response_text
+            mock_patch.return_value.text = requests_response_text
+            mock_request.return_value.text = requests_response_text
 
             # Ensure there is no side effect set
             mock_post.side_effect = None
@@ -356,6 +443,8 @@ class AppriseURLTester:
             mock_put.side_effect = None
             mock_head.side_effect = None
             mock_get.side_effect = None
+            mock_patch.side_effect = None
+            mock_request.side_effect = None
 
         else:
             # Handle exception testing; first we turn the boolean flag
@@ -365,10 +454,22 @@ class AppriseURLTester:
         try:
             if test_requests_exceptions is False:
 
+                # Verify we can acquire a target count as an integer
+                targets = len(obj)
+
                 # check that we're as expected
-                assert obj.notify(
+                _resp = obj.notify(
                     body=self.body, title=self.title,
-                    notify_type=notify_type) == notify_response
+                    notify_type=notify_type)
+                if _resp != notify_response:
+                    print('%s notify() returned %s (but expected %s)' % (
+                        url, _resp, notify_response))
+                    assert False
+
+                if notify_response:
+                    # If we successfully got a response, there must have been
+                    # at least 1 target present
+                    assert targets > 0
 
                 # check that this doesn't change using different overflow
                 # methods
@@ -441,11 +542,58 @@ class AppriseURLTester:
                         os.path.join(self.__test_var_dir, 'apprise-test.png'),
                         os.path.join(self.__test_var_dir, 'apprise-test.jpeg'),
                     ))
+
                     assert obj.notify(
                         body=self.body, title=self.title,
                         notify_type=notify_type,
                         attach=attach) == attach_response
 
+                    if obj.attachment_support:
+                        #
+                        # Services that support attachments should support
+                        # sending a attachment (or more) without a body or
+                        # title specified:
+                        #
+                        assert obj.notify(
+                            body=None, title=None,
+                            notify_type=notify_type,
+                            attach=attach) == attach_response
+
+                        # Turn off attachment support on the notifications
+                        # that support it so we can test that any logic we
+                        # have ot test against this flag is ran
+                        obj.attachment_support = False
+
+                        #
+                        # Notifications should still transmit as normal if
+                        # Attachment support is flipped off
+                        #
+                        assert obj.notify(
+                            body=self.body, title=self.title,
+                            notify_type=notify_type,
+                            attach=attach) == notify_response
+
+                        #
+                        # We should not be able to send a message without a
+                        # body or title in this circumstance
+                        #
+                        assert obj.notify(
+                            body=None, title=None,
+                            notify_type=notify_type,
+                            attach=attach) is False
+
+                        # Toggle Back
+                        obj.attachment_support = True
+
+                    else:  # No Attachment support
+                        #
+                        # We should not be able to send a message without a
+                        # body or title in this circumstance
+                        #
+                        assert obj.notify(
+                            body=None, title=None,
+                            notify_type=notify_type,
+                            attach=attach) is False
             else:
 
                 for _exception in self.req_exceptions:
@@ -454,11 +602,13 @@ class AppriseURLTester:
                     mock_del.side_effect = _exception
                     mock_put.side_effect = _exception
                     mock_get.side_effect = _exception
+                    mock_patch.side_effect = _exception
+                    mock_request.side_effect = _exception
 
                     try:
                         assert obj.notify(
                             body=self.body, title=self.title,
-                            notify_type=NotifyType.INFO) is False
+                            notify_type=notify_type) is False
 
                     except AssertionError:
                         # Don't mess with these entries
@@ -498,11 +648,13 @@ class AppriseURLTester:
                     mock_put.side_effect = _exception
                     mock_head.side_effect = _exception
                     mock_get.side_effect = _exception
+                    mock_patch.side_effect = _exception
+                    mock_request.side_effect = _exception
 
                     try:
                         assert obj.notify(
                             body=self.body,
-                            notify_type=NotifyType.INFO) is False
+                            notify_type=notify_type) is False
 
                     except AssertionError:
                         # Don't mess with these entries

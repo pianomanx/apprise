@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# BSD 3-Clause License
+# BSD 2-Clause License
 #
 # Apprise - Push Notification Library.
-# Copyright (c) 2023, Chris Caron <lead2gold@gmail.com>
+# Copyright (c) 2025, Chris Caron <lead2gold@gmail.com>
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
@@ -13,10 +13,6 @@
 # 2. Redistributions in binary form must reproduce the above copyright notice,
 #    this list of conditions and the following disclaimer in the documentation
 #    and/or other materials provided with the distribution.
-#
-# 3. Neither the name of the copyright holder nor the names of its
-#    contributors may be used to endorse or promote products derived from
-#    this software without specific prior written permission.
 #
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 # AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
@@ -36,7 +32,7 @@ from unittest import mock
 
 import requests
 from apprise import Apprise
-from apprise.plugins.NotifySMSEagle import NotifySMSEagle
+from apprise.plugins.smseagle import NotifySMSEagle
 from helpers import AppriseURLTester
 from apprise import AppriseAttachment
 from apprise import NotifyType
@@ -299,8 +295,8 @@ def test_plugin_smseagle_edge_cases(mock_post):
     aobj = Apprise()
     assert aobj.add(
         "smseagles://token@localhost:231/{}".format(target))
+    assert len(aobj) == 1
     assert aobj.notify(title=title, body=body)
-
     assert mock_post.call_count == 1
 
     details = mock_post.call_args_list[0]
@@ -315,8 +311,8 @@ def test_plugin_smseagle_edge_cases(mock_post):
     assert aobj.add(
         "smseagles://token@localhost:231/{}?status=Yes".format(
             target))
+    assert len(aobj) == 1
     assert aobj.notify(title=title, body=body)
-
     assert mock_post.call_count == 1
 
     details = mock_post.call_args_list[0]
@@ -348,6 +344,8 @@ def test_plugin_smseagle_result_set(mock_post):
     aobj.add(
         'smseagle://token@10.0.0.112:8080/+12512222222/+12513333333/'
         '12514444444?batch=yes')
+    # In a batch mode we can shove them all into 1 call
+    assert len(aobj[0]) == 1
 
     assert aobj.notify(title=title, body=body)
 
@@ -386,6 +384,7 @@ def test_plugin_smseagle_result_set(mock_post):
     aobj.add(
         'smseagle://token@10.0.0.112:8080/#group/Contact/'
         '123456789?batch=no')
+    assert len(aobj[0]) == 3
 
     assert aobj.notify(title=title, body=body)
 
@@ -463,6 +462,8 @@ def test_plugin_smseagle_result_set(mock_post):
         'smseagle://token@10.0.0.112:8080/513333333/#group1/@contact1/'
         'contact2/12514444444?batch=yes')
 
+    # contacts and numbers can be combined and is calculated in batch response
+    assert len(aobj[0]) == 3
     assert aobj.notify(title=title, body=body)
 
     # There is a unique post to each (group, contact x2, and phone x2)

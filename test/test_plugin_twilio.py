@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# BSD 3-Clause License
+# BSD 2-Clause License
 #
 # Apprise - Push Notification Library.
-# Copyright (c) 2023, Chris Caron <lead2gold@gmail.com>
+# Copyright (c) 2025, Chris Caron <lead2gold@gmail.com>
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
@@ -13,10 +13,6 @@
 # 2. Redistributions in binary form must reproduce the above copyright notice,
 #    this list of conditions and the following disclaimer in the documentation
 #    and/or other materials provided with the distribution.
-#
-# 3. Neither the name of the copyright holder nor the names of its
-#    contributors may be used to endorse or promote products derived from
-#    this software without specific prior written permission.
 #
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 # AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
@@ -36,7 +32,7 @@ import requests
 import pytest
 from json import dumps
 from apprise import Apprise
-from apprise.plugins.NotifyTwilio import NotifyTwilio
+from apprise.plugins.twilio import NotifyTwilio
 from helpers import AppriseURLTester
 
 # Disable logging for a cleaner testing output
@@ -73,8 +69,8 @@ apprise_url_tests = (
         # sid and token provided and from but invalid from no
         'instance': TypeError,
     }),
-    ('twilio://AC{}:{}@{}/123/{}/abcd/'.format(
-        'a' * 32, 'b' * 32, '3' * 11, '9' * 15), {
+    ('twilio://AC{}:{}@{}/123/{}/abcd/w:{}'.format(
+        'a' * 32, 'b' * 32, '3' * 11, '9' * 15, 8 * 11), {
         # valid everything but target numbers
         'instance': NotifyTwilio,
     }),
@@ -84,6 +80,20 @@ apprise_url_tests = (
 
         # Our expected url(privacy=True) startswith() response:
         'privacy_url': 'twilio://...aaaa:b...b@12345',
+    }),
+    ('twilio://AC{}:{}@98765/{}/w:{}/'.format(
+        'a' * 32, 'b' * 32, '4' * 11, '5' * 11), {
+            # using short-code (5 characters) and 1 twillio address ignored
+            # because source phone number can not be a short code
+            'instance': NotifyTwilio,
+
+            # Our expected url(privacy=True) startswith() response:
+            'privacy_url': 'twilio://...aaaa:b...b@98765',
+    }),
+    ('twilio://AC{}:{}@w:12345/{}/{}'.format(
+        'a' * 32, 'b' * 32, '4' * 11, '5' * 11), {
+            # Invalid short-code
+            'instance': TypeError,
     }),
     ('twilio://AC{}:{}@123456/{}'.format('a' * 32, 'b' * 32, '4' * 11), {
         # using short-code (6 characters)
@@ -97,6 +107,11 @@ apprise_url_tests = (
     ('twilio://_?sid=AC{}&token={}&from={}'.format(
         'a' * 32, 'b' * 32, '5' * 11), {
         # use get args to acomplish the same thing
+        'instance': NotifyTwilio,
+    }),
+    ('twilio://_?sid=AC{}&token={}&from={}&to=w:{}'.format(
+        'a' * 32, 'b' * 32, '5' * 11, '6' * 11), {
+        # Support whatsapp (w: before number)
         'instance': NotifyTwilio,
     }),
     ('twilio://_?sid=AC{}&token={}&source={}'.format(
@@ -162,8 +177,8 @@ def test_plugin_twilio_auth(mock_post):
     obj = Apprise.instantiate(
         'twilio://{}:{}@{}/{}'
         .format(account_sid, auth_token, source, dest))
-    assert isinstance(obj, NotifyTwilio) is True
-    assert isinstance(obj.url(), str) is True
+    assert isinstance(obj, NotifyTwilio)
+    assert isinstance(obj.url(), str)
 
     # Send Notification
     assert obj.send(body=message_contents) is True
@@ -172,8 +187,8 @@ def test_plugin_twilio_auth(mock_post):
     obj = Apprise.instantiate(
         'twilio://{}:{}@{}/{}?apikey={}'
         .format(account_sid, auth_token, source, dest, apikey))
-    assert isinstance(obj, NotifyTwilio) is True
-    assert isinstance(obj.url(), str) is True
+    assert isinstance(obj, NotifyTwilio)
+    assert isinstance(obj.url(), str)
 
     # Send Notification
     assert obj.send(body=message_contents) is True
@@ -231,6 +246,11 @@ def test_plugin_twilio_edge_cases(mock_post):
     with pytest.raises(TypeError):
         NotifyTwilio(
             account_sid=account_sid, auth_token=None, source=source)
+
+    # Source is bad
+    with pytest.raises(TypeError):
+        NotifyTwilio(
+            account_sid=account_sid, auth_token=auth_token, source='')
 
     # a error response
     response.status_code = 400
