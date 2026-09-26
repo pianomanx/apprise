@@ -1,6 +1,6 @@
 .\" generated with Ronn-NG/v0.10.1
 .\" http://github.com/apjanke/ronn-ng/tree/0.10.1
-.TH "APPRISE" "1" "August 2026" "Chris Caron <lead2gold@gmail.com>"
+.TH "APPRISE" "1" "September 2026" "Chris Caron <lead2gold@gmail.com>"
 .SH "NAME"
 \fBapprise\fR \- Push Notifications that work with just about every platform!
 .SH "SYNOPSIS"
@@ -41,6 +41,8 @@ You can optionally choose to specify more than one \fB\-\-plugin\-path\fR (\fB\-
 \fB\-i\fR, \fB\-\-input\-format=\fR\fIVALUE\fR: Specify the input message format (default=text)\. Possible values are "text", "html", and "markdown"\.
 .P
 \fB\-T\fR, \fB\-\-theme=\fR\fIVALUE\fR: Specify the default theme\.
+.P
+\fB\-tv\fR, \fB\-\-template\-var=\fR\fINAME=VALUE\fR: Supply a value used by a YAML configuration written with \fB${NAME}\fR\. Specify this option more than once to supply more than one value, but name each one only once\. A value not provided here uses the default in the configuration's \fBtemplate:\fR section, then \fBAPPRISE_TEMPLATE_<NAME>\fR\. A URL that still has no value available is not loaded\.
 .P
 \fB\-g\fR, \fB\-\-tag=\fR\fIVALUE\fR: Specify one or more tags to filter which services to notify:
 .IP "\(bu" 4
@@ -315,6 +317,40 @@ $ apprise \-vv \-\-title "Will Be Late Getting Home" \e
     \-\-tag=family
 .fi
 .IP "" 0
+.SS "TEMPLATE VARIABLES"
+A \fBYAML\fR configuration can leave a value out of a URL and have it filled in later\. Write \fB${NAME}\fR where the value belongs and declare every name you use in a \fBtemplate:\fR section:
+.IP "" 4
+.nf
+template:
+  # A value written here is used when nothing else supplies one
+  smtp_host: smtp\.example\.com
+  # No value, so this one must always be supplied
+  api_key:
+
+urls:
+  \- sendgrid://${API_KEY}:noreply@example\.com/you@example\.com:
+      \- tag: alerts
+.fi
+.IP "" 0
+.P
+Values are looked for in this order, stopping at the first that answers:
+.IP "\(bu" 4
+a value given with \fB\-\-template\-var\fR (\fB\-tv\fR)
+.IP "\(bu" 4
+the default written in the \fBtemplate:\fR section
+.IP "\(bu" 4
+the environment variable \fBAPPRISE_TEMPLATE_<NAME>\fR
+.IP "" 0
+.P
+A URL with no value available is not loaded, and \fBapprise\fR exits with a status of \fB4\fR if others were notified, or \fB1\fR if none were\. Use \fB\-\-dry\-run\fR to see which values a configuration is still waiting for\.
+.P
+\fB${NAME}\fR only means something when \fBNAME\fR appears in the \fBtemplate:\fR section\. Anywhere else it is ordinary text and is sent exactly as written, so a password containing \fB${\|\.\|\.\|\.}\fR is never altered\. Names ignore case, and a name may be used as often as you like\. Values may be up to 1,024 characters\. Extra supplied names are accepted and ignored; their names appear only in the local debug log, never with their values\.
+.P
+The configuration author may place a variable directly in a URL or in a named YAML setting below it\. URL markers can change any field, including the destination; whole\-host markers also accept \fBuser@host\fR and \fBuser:pass@host\fR\. A named setting changes only its option, so prefer it for values supplied by less\-trusted callers\.
+.P
+A variable may not appear before \fB://\fR, may not be used for \fBtag:\fR/\fBtags:\fR, and may not be used as a setting's name\. The service and tags are selected before values are filled in, so neither can be dynamic\.
+.P
+This applies to \fBYAML\fR configuration only; \fBTEXT\fR configuration is passed through unchanged\.
 .SH "ENVIRONMENT VARIABLES"
 \fBAPPRISE_URLS\fR: Specify the default URLs to notify IF none are otherwise specified on the command line explicitly\. If the \fB\-\-config\fR (\fB\-c\fR) is specified, then this will override any reference to this variable\. Use white space and/or a comma (\fB,\fR) to delimit multiple entries\.
 .P
@@ -323,6 +359,8 @@ $ apprise \-vv \-\-title "Will Be Late Getting Home" \e
 \fBAPPRISE_PLUGIN_PATH\fR: Explicitly specify the custom plugin search path to use (overriding the default)\. Use a semi\-colon (\fB;\fR), line\-feed (\fB\en\fR), and/or carriage return (\fB\er\fR) to delimit multiple entries\.
 .P
 \fBAPPRISE_STORAGE_PATH\fR: Explicitly specify the persistent storage path to use (overriding the default)\.
+.P
+\fBAPPRISE_TEMPLATE_<NAME>\fR: Supply a value for a \fB${NAME}\fR used by a YAML configuration\. For example \fBAPPRISE_TEMPLATE_API_KEY\fR fills in \fB${API_KEY}\fR\. A value supplied with \fB\-\-template\-var\fR (\fB\-tv\fR) and a configuration default both take priority\. Blank values are ignored\.
 .P
 \fBHTTP_PROXY\fR, \fBHTTPS_PROXY\fR, \fBNO_PROXY\fR: Standard proxy variables honored by the underlying \fBrequests\fR library (not Apprise\-specific)\. Set \fBHTTP_PROXY\fR/\fBHTTPS_PROXY\fR to route outbound notifications through a proxy, and \fBNO_PROXY\fR to exempt specific hosts\. SOCKS proxies (\fBsocks5h://\|\.\|\.\|\.\fR) additionally require the optional \fBPySocks\fR package (\fBpip install pysocks\fR) to be installed\.
 .SH "BUGS"

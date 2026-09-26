@@ -98,7 +98,7 @@ notification services. It supports sending alerts to platforms such as: \
 `Zoom`, and `Zulip`.}
 
 Name:           python-%{pypi_name}
-Version:        1.13.1
+Version:        2.0.0
 Release:        1%{?dist}
 Summary:        A simple wrapper to many popular notification services used today
 License:        BSD-2-Clause
@@ -293,6 +293,9 @@ LANG=C.UTF-8 PYTHONPATH=%{buildroot}%{python3_sitelib}:%{_builddir}/%{name}-%{ve
 %{python3_sitelib}/%{pypi_name}/__pycache__/cli*.py?
 
 %changelog
+* Sat Sep 26 2026 Chris Caron <lead2gold@gmail.com> - 2.0.0-1
+- Updated to major release of v2.0.0
+
 * Sun Aug 30 2026 Chris Caron <lead2gold@gmail.com> - 1.13.1-1
 - Updated to v1.13.1
 
